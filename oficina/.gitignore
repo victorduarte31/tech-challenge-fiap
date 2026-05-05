@@ -1,0 +1,11 @@
+target/
+keys/
+*.log
+*.class
+.idea/
+*.iml
+.DS_Store
+
+# Nunca commitar chaves privadas!
+keys/privateKey.pem
+keys/publicKey.pem
