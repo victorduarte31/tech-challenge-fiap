@@ -8,6 +8,7 @@ import br.com.oficina.infrastructure.repository.*;
 import br.com.oficina.infrastructure.validation.CpfCnpjUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
+import jakarta.transaction.Transactional.TxType;
 import java.util.List;
 
 @ApplicationScoped
@@ -31,24 +32,28 @@ public class WorkOrderService {
         this.serviceItemRepository = serviceItemRepository;
     }
 
+    @Transactional(TxType.SUPPORTS)
     public List<WorkOrderResponseDto> listAll() {
         return workOrderRepository.listAll().stream()
             .map(WorkOrderResponseDto::from)
             .toList();
     }
 
+    @Transactional(TxType.SUPPORTS)
     public List<WorkOrderResponseDto> listByStatus(WorkOrderStatus status) {
         return workOrderRepository.findByStatus(status).stream()
             .map(WorkOrderResponseDto::from)
             .toList();
     }
 
+    @Transactional(TxType.SUPPORTS)
     public WorkOrderResponseDto findById(Long id) {
         WorkOrder wo = workOrderRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException("Ordem de Serviço", id));
         return WorkOrderResponseDto.from(wo);
     }
 
+    @Transactional(TxType.SUPPORTS)
     public WorkOrderResponseDto findByOrderNumber(String orderNumber) {
         WorkOrder wo = workOrderRepository.findByOrderNumber(orderNumber)
             .orElseThrow(() -> new ResourceNotFoundException(
@@ -68,17 +73,13 @@ public class WorkOrderService {
         Vehicle vehicle = vehicleRepository.findByIdOptional(dto.vehicleId())
             .orElseThrow(() -> new ResourceNotFoundException("Veículo", dto.vehicleId()));
 
-        if (!vehicle.client.id.equals(client.id)) {
+        if (!vehicle.getClient().getId().equals(client.getId())) {
             throw new BusinessException("O veículo não pertence ao cliente informado");
         }
 
-        WorkOrder wo = new WorkOrder();
-        wo.client = client;
-        wo.vehicle = vehicle;
-        wo.notes = dto.notes();
+        WorkOrder wo = new WorkOrder(client, vehicle, dto.notes());
         workOrderRepository.persist(wo);
-
-        wo.orderNumber = "OS-" + String.format("%06d", wo.id);
+        wo.assignOrderNumber("OS-" + String.format("%06d", wo.getId()));
 
         if (dto.services() != null) {
             for (WorkOrderServiceDto s : dto.services()) {
@@ -90,44 +91,34 @@ public class WorkOrderService {
                 addPartToOrder(wo, p);
             }
         }
-        wo.recalculateTotalCost();
         return WorkOrderResponseDto.from(wo);
     }
 
     @Transactional
     public WorkOrderResponseDto addService(Long id, WorkOrderServiceDto dto) {
-        WorkOrder wo = getEditableWorkOrder(id);
+        WorkOrder wo = findWorkOrder(id);
         addServiceToOrder(wo, dto);
-        wo.recalculateTotalCost();
         return WorkOrderResponseDto.from(wo);
     }
 
     @Transactional
     public WorkOrderResponseDto addPart(Long id, WorkOrderPartDto dto) {
-        WorkOrder wo = getEditableWorkOrder(id);
+        WorkOrder wo = findWorkOrder(id);
         addPartToOrder(wo, dto);
-        wo.recalculateTotalCost();
         return WorkOrderResponseDto.from(wo);
     }
 
     @Transactional
     public WorkOrderResponseDto removeService(Long id, Long serviceLineId) {
-        WorkOrder wo = getEditableWorkOrder(id);
-        wo.services.removeIf(s -> s.id.equals(serviceLineId));
-        wo.recalculateTotalCost();
+        WorkOrder wo = findWorkOrder(id);
+        wo.removeService(serviceLineId);
         return WorkOrderResponseDto.from(wo);
     }
 
     @Transactional
     public WorkOrderResponseDto removePart(Long id, Long partLineId) {
-        WorkOrder wo = getEditableWorkOrder(id);
-        WorkOrderPart toRemove = wo.parts.stream()
-            .filter(p -> p.id.equals(partLineId))
-            .findFirst()
-            .orElseThrow(() -> new ResourceNotFoundException("Linha de peça", partLineId));
-        toRemove.part.increaseStock(toRemove.quantity);
-        wo.parts.remove(toRemove);
-        wo.recalculateTotalCost();
+        WorkOrder wo = findWorkOrder(id);
+        wo.removePart(partLineId);
         return WorkOrderResponseDto.from(wo);
     }
 
@@ -180,45 +171,47 @@ public class WorkOrderService {
         return WorkOrderResponseDto.from(wo);
     }
 
+    @Transactional
+    public WorkOrderResponseDto approveByOrderNumber(String orderNumber, String clientCpfCnpj) {
+        WorkOrder wo = findAndAuthorize(orderNumber, clientCpfCnpj);
+        wo.approve();
+        return WorkOrderResponseDto.from(wo);
+    }
+
+    @Transactional
+    public WorkOrderResponseDto rejectByOrderNumber(String orderNumber, String clientCpfCnpj) {
+        WorkOrder wo = findAndAuthorize(orderNumber, clientCpfCnpj);
+        wo.reject();
+        return WorkOrderResponseDto.from(wo);
+    }
+
+    private WorkOrder findAndAuthorize(String orderNumber, String providedCpfCnpj) {
+        WorkOrder wo = workOrderRepository.findByOrderNumber(orderNumber)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Ordem de Serviço não encontrada: " + orderNumber));
+
+        String normalized = CpfCnpjUtils.normalize(providedCpfCnpj);
+        if (!wo.getClient().getCpfCnpj().equals(normalized)) {
+            // Mensagem genérica para não distinguir "OS inexistente" de "CPF/CNPJ não confere"
+            throw new ResourceNotFoundException("Ordem de Serviço não encontrada: " + orderNumber);
+        }
+        return wo;
+    }
+
     private WorkOrder findWorkOrder(Long id) {
         return workOrderRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException("Ordem de Serviço", id));
     }
 
-    private WorkOrder getEditableWorkOrder(Long id) {
-        WorkOrder wo = findWorkOrder(id);
-        if (wo.status != WorkOrderStatus.RECEIVED && wo.status != WorkOrderStatus.IN_DIAGNOSIS) {
-            throw new BusinessException(
-                "Não é possível editar uma OS com status: " + wo.status
-            );
-        }
-        return wo;
-    }
-
     private void addServiceToOrder(WorkOrder wo, WorkOrderServiceDto dto) {
         ServiceItem serviceItem = serviceItemRepository.findByIdOptional(dto.serviceItemId())
             .orElseThrow(() -> new ResourceNotFoundException("Serviço", dto.serviceItemId()));
-        if (Boolean.FALSE.equals(serviceItem.active)) {
-            throw new BusinessException("Serviço inativo: " + serviceItem.name);
-        }
-        WorkOrderServiceItem line = new WorkOrderServiceItem();
-        line.workOrder = wo;
-        line.serviceItem = serviceItem;
-        line.price = serviceItem.basePrice;
-        line.notes = dto.notes();
-        wo.services.add(line);
+        wo.addService(serviceItem, dto.notes());
     }
 
     private void addPartToOrder(WorkOrder wo, WorkOrderPartDto dto) {
         Part part = partRepository.findByIdOptional(dto.partId())
             .orElseThrow(() -> new ResourceNotFoundException("Peça/Insumo", dto.partId()));
-        part.decreaseStock(dto.quantity());
-
-        WorkOrderPart line = new WorkOrderPart();
-        line.workOrder = wo;
-        line.part = part;
-        line.quantity = dto.quantity();
-        line.unitPrice = part.unitPrice;
-        wo.parts.add(line);
+        wo.addPart(part, dto.quantity());
     }
 }

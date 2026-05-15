@@ -106,14 +106,24 @@ public class WorkOrderResource {
 
     @PATCH
     @Path("/{id}/approve")
-    @Operation(summary = "Aprovar orçamento internamente (AWAITING_APPROVAL → IN_EXECUTION)")
+    @Operation(
+        summary = "Registrar aprovação presencial do cliente (AWAITING_APPROVAL → IN_EXECUTION)",
+        description = "Endpoint administrativo destinado ao atendente registrar uma aprovação " +
+                      "feita pelo cliente PRESENCIALMENTE ou por telefone. " +
+                      "Para aprovação remota pelo próprio cliente, usar POST /public/work-orders/{orderNumber}/approve."
+    )
     public WorkOrderResponseDto approve(@PathParam("id") Long id) {
         return workOrderService.approve(id);
     }
 
     @PATCH
     @Path("/{id}/reject")
-    @Operation(summary = "Rejeitar orçamento internamente (AWAITING_APPROVAL → CANCELLED)")
+    @Operation(
+        summary = "Registrar rejeição presencial do cliente (AWAITING_APPROVAL → CANCELLED)",
+        description = "Endpoint administrativo destinado ao atendente registrar uma rejeição " +
+                      "feita pelo cliente PRESENCIALMENTE ou por telefone. " +
+                      "Para rejeição remota pelo próprio cliente, usar POST /public/work-orders/{orderNumber}/reject."
+    )
     public WorkOrderResponseDto reject(@PathParam("id") Long id) {
         return workOrderService.reject(id);
     }

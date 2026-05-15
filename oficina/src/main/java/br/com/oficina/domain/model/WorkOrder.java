@@ -1,10 +1,13 @@
 package br.com.oficina.domain.model;
 
+import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.InvalidStatusTransitionException;
+import br.com.oficina.domain.exception.ResourceNotFoundException;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @Entity
@@ -13,61 +16,71 @@ public class WorkOrder {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    private Long id;
 
     @Column(name = "order_number", unique = true, length = 20)
-    public String orderNumber;
+    private String orderNumber;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "client_id", nullable = false)
-    public Client client;
+    private Client client;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "vehicle_id", nullable = false)
-    public Vehicle vehicle;
+    private Vehicle vehicle;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 25)
-    public WorkOrderStatus status = WorkOrderStatus.RECEIVED;
+    private WorkOrderStatus status = WorkOrderStatus.RECEIVED;
 
     @Column(length = 500)
-    public String notes;
+    private String notes;
 
     @Column(name = "total_cost", precision = 10, scale = 2)
-    public BigDecimal totalCost = BigDecimal.ZERO;
+    private BigDecimal totalCost = BigDecimal.ZERO;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    public LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    public LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 
     @Column(name = "diagnosis_started_at")
-    public LocalDateTime diagnosisStartedAt;
+    private LocalDateTime diagnosisStartedAt;
 
     @Column(name = "sent_for_approval_at")
-    public LocalDateTime sentForApprovalAt;
+    private LocalDateTime sentForApprovalAt;
 
     @Column(name = "approved_at")
-    public LocalDateTime approvedAt;
+    private LocalDateTime approvedAt;
 
     @Column(name = "execution_started_at")
-    public LocalDateTime executionStartedAt;
+    private LocalDateTime executionStartedAt;
 
     @Column(name = "finished_at")
-    public LocalDateTime finishedAt;
+    private LocalDateTime finishedAt;
 
     @Column(name = "delivered_at")
-    public LocalDateTime deliveredAt;
+    private LocalDateTime deliveredAt;
 
     @Column(name = "cancelled_at")
-    public LocalDateTime cancelledAt;
+    private LocalDateTime cancelledAt;
 
-    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    public List<WorkOrderPart> parts = new ArrayList<>();
+    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private final List<WorkOrderPart> parts = new ArrayList<>();
 
-    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
-    public List<WorkOrderServiceItem> services = new ArrayList<>();
+    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private final List<WorkOrderServiceItem> services = new ArrayList<>();
+
+    protected WorkOrder() {
+        // Required by JPA
+    }
+
+    public WorkOrder(Client client, Vehicle vehicle, String notes) {
+        this.client = client;
+        this.vehicle = vehicle;
+        this.notes = notes;
+    }
 
     @PrePersist
     void prePersist() {
@@ -80,7 +93,68 @@ public class WorkOrder {
         updatedAt = LocalDateTime.now();
     }
 
-    // ===== Domain State Machine =====
+    // ===== Identidade =====
+
+    public void assignOrderNumber(String orderNumber) {
+        if (this.orderNumber != null) {
+            throw new BusinessException("Número da OS já foi atribuído: " + this.orderNumber);
+        }
+        this.orderNumber = orderNumber;
+    }
+
+    public void updateNotes(String notes) {
+        this.notes = notes;
+    }
+
+    // ===== Manipulação de itens (delega regras ao agregado) =====
+
+    public WorkOrderPart addPart(Part part, int quantity) {
+        ensureEditable();
+        part.decreaseStock(quantity);
+        WorkOrderPart line = new WorkOrderPart(this, part, quantity, part.getUnitPrice());
+        this.parts.add(line);
+        recalculateTotalCost();
+        return line;
+    }
+
+    public void removePart(Long partLineId) {
+        ensureEditable();
+        WorkOrderPart line = this.parts.stream()
+            .filter(p -> p.getId().equals(partLineId))
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException("Linha de peça", partLineId));
+        line.getPart().increaseStock(line.getQuantity());
+        this.parts.remove(line);
+        recalculateTotalCost();
+    }
+
+    public WorkOrderServiceItem addService(ServiceItem serviceItem, String serviceNotes) {
+        ensureEditable();
+        if (!serviceItem.isActive()) {
+            throw new BusinessException("Serviço inativo: " + serviceItem.getName());
+        }
+        WorkOrderServiceItem line = new WorkOrderServiceItem(this, serviceItem, serviceItem.getBasePrice(), serviceNotes);
+        this.services.add(line);
+        recalculateTotalCost();
+        return line;
+    }
+
+    public void removeService(Long serviceLineId) {
+        ensureEditable();
+        boolean removed = this.services.removeIf(s -> s.getId().equals(serviceLineId));
+        if (!removed) {
+            throw new ResourceNotFoundException("Linha de serviço", serviceLineId);
+        }
+        recalculateTotalCost();
+    }
+
+    private void ensureEditable() {
+        if (status != WorkOrderStatus.RECEIVED && status != WorkOrderStatus.IN_DIAGNOSIS) {
+            throw new BusinessException("Não é possível editar uma OS com status: " + status);
+        }
+    }
+
+    // ===== State Machine =====
 
     public void startDiagnosis() {
         requireStatus(WorkOrderStatus.RECEIVED);
@@ -104,6 +178,7 @@ public class WorkOrder {
 
     public void reject() {
         requireStatus(WorkOrderStatus.AWAITING_APPROVAL);
+        restoreStockOfAllParts();
         status = WorkOrderStatus.CANCELLED;
         cancelledAt = LocalDateTime.now();
     }
@@ -126,8 +201,15 @@ public class WorkOrder {
                 "Não é possível cancelar uma OS com status: " + status
             );
         }
+        restoreStockOfAllParts();
         status = WorkOrderStatus.CANCELLED;
         cancelledAt = LocalDateTime.now();
+    }
+
+    private void restoreStockOfAllParts() {
+        for (WorkOrderPart line : parts) {
+            line.getPart().increaseStock(line.getQuantity());
+        }
     }
 
     public void recalculateTotalCost() {
@@ -136,7 +218,7 @@ public class WorkOrder {
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal servicesCost = services.stream()
-            .map(s -> s.price)
+            .map(WorkOrderServiceItem::getPrice)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         totalCost = partsCost.add(servicesCost);
@@ -156,4 +238,25 @@ public class WorkOrder {
         }
         return java.time.Duration.between(executionStartedAt, finishedAt).toMinutes();
     }
+
+    // ===== Getters =====
+
+    public Long getId() { return id; }
+    public String getOrderNumber() { return orderNumber; }
+    public Client getClient() { return client; }
+    public Vehicle getVehicle() { return vehicle; }
+    public WorkOrderStatus getStatus() { return status; }
+    public String getNotes() { return notes; }
+    public BigDecimal getTotalCost() { return totalCost; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public LocalDateTime getDiagnosisStartedAt() { return diagnosisStartedAt; }
+    public LocalDateTime getSentForApprovalAt() { return sentForApprovalAt; }
+    public LocalDateTime getApprovedAt() { return approvedAt; }
+    public LocalDateTime getExecutionStartedAt() { return executionStartedAt; }
+    public LocalDateTime getFinishedAt() { return finishedAt; }
+    public LocalDateTime getDeliveredAt() { return deliveredAt; }
+    public LocalDateTime getCancelledAt() { return cancelledAt; }
+    public List<WorkOrderPart> getParts() { return Collections.unmodifiableList(parts); }
+    public List<WorkOrderServiceItem> getServices() { return Collections.unmodifiableList(services); }
 }

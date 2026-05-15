@@ -6,6 +6,7 @@ import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.*;
 import br.com.oficina.infrastructure.repository.*;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,7 +15,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -41,45 +41,23 @@ class WorkOrderServiceTest {
 
     @BeforeEach
     void setUp() {
-        client = new Client();
-        client.id = 1L;
-        client.name = "Cliente Teste";
-        client.cpfCnpj = "11144477735";
-        client.clientType = ClientType.PF;
+        client = new Client("Cliente Teste", "11144477735", ClientType.PF, null, null);
+        DomainTestFixtures.setId(client, 1L);
 
-        vehicle = new Vehicle();
-        vehicle.id = 1L;
-        vehicle.licensePlate = "ABC1234";
-        vehicle.brand = "Toyota";
-        vehicle.model = "Corolla";
-        vehicle.productionYear = 2020;
-        vehicle.client = client;
+        vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, client);
+        DomainTestFixtures.setId(vehicle, 1L);
 
-        workOrder = new WorkOrder();
-        workOrder.id = 1L;
-        workOrder.orderNumber = "OS-000001";
-        workOrder.client = client;
-        workOrder.vehicle = vehicle;
-        workOrder.status = WorkOrderStatus.RECEIVED;
-        workOrder.totalCost = BigDecimal.ZERO;
-        workOrder.parts = new ArrayList<>();
-        workOrder.services = new ArrayList<>();
-        workOrder.createdAt = LocalDateTime.now();
-        workOrder.updatedAt = LocalDateTime.now();
+        workOrder = new WorkOrder(client, vehicle, null);
+        DomainTestFixtures.setId(workOrder, 1L);
+        DomainTestFixtures.setField(workOrder, "orderNumber", "OS-000001");
+        DomainTestFixtures.setField(workOrder, "createdAt", LocalDateTime.now());
+        DomainTestFixtures.setField(workOrder, "updatedAt", LocalDateTime.now());
 
-        part = new Part();
-        part.id = 1L;
-        part.name = "Óleo Motor";
-        part.unitPrice = new BigDecimal("45.90");
-        part.stockQuantity = 10;
-        part.unit = "L";
+        part = new Part("Óleo Motor", null, new BigDecimal("45.90"), 10, "L");
+        DomainTestFixtures.setId(part, 1L);
 
-        serviceItem = new ServiceItem();
-        serviceItem.id = 1L;
-        serviceItem.name = "Troca de Óleo";
-        serviceItem.basePrice = new BigDecimal("120.00");
-        serviceItem.estimatedDurationMinutes = 30;
-        serviceItem.active = true;
+        serviceItem = new ServiceItem("Troca de Óleo", null, new BigDecimal("120.00"), 30);
+        DomainTestFixtures.setId(serviceItem, 1L);
     }
 
     @Test
@@ -123,7 +101,11 @@ class WorkOrderServiceTest {
     void create_withValidData_shouldCreateWorkOrder() {
         when(clientRepository.findByCpfCnpj("11144477735")).thenReturn(Optional.of(client));
         when(vehicleRepository.findByIdOptional(1L)).thenReturn(Optional.of(vehicle));
-        doNothing().when(workOrderRepository).persist(any(WorkOrder.class));
+        doAnswer(inv -> {
+            WorkOrder wo = inv.getArgument(0);
+            DomainTestFixtures.setId(wo, 42L);
+            return null;
+        }).when(workOrderRepository).persist(any(WorkOrder.class));
 
         WorkOrderCreateDto dto = new WorkOrderCreateDto(
             "111.444.777-35", 1L, "Revisão geral", null, null
@@ -137,9 +119,9 @@ class WorkOrderServiceTest {
 
     @Test
     void create_withWrongVehicleOwner_shouldThrowBusinessException() {
-        Client otherClient = new Client();
-        otherClient.id = 2L;
-        vehicle.client = otherClient;
+        Client otherClient = new Client("Outro", "52998224725", ClientType.PF, null, null);
+        DomainTestFixtures.setId(otherClient, 2L);
+        DomainTestFixtures.setField(vehicle, "client", otherClient);
 
         when(clientRepository.findByCpfCnpj("11144477735")).thenReturn(Optional.of(client));
         when(vehicleRepository.findByIdOptional(1L)).thenReturn(Optional.of(vehicle));
@@ -172,12 +154,12 @@ class WorkOrderServiceTest {
         WorkOrderResponseDto result = workOrderService.startDiagnosis(1L);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.IN_DIAGNOSIS);
-        assertThat(workOrder.diagnosisStartedAt).isNotNull();
+        assertThat(workOrder.getDiagnosisStartedAt()).isNotNull();
     }
 
     @Test
     void startDiagnosis_fromWrongStatus_shouldThrow() {
-        workOrder.status = WorkOrderStatus.IN_EXECUTION;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_EXECUTION);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         assertThatThrownBy(() -> workOrderService.startDiagnosis(1L))
@@ -186,63 +168,63 @@ class WorkOrderServiceTest {
 
     @Test
     void sendForApproval_fromInDiagnosis_shouldChangeStatus() {
-        workOrder.status = WorkOrderStatus.IN_DIAGNOSIS;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         WorkOrderResponseDto result = workOrderService.sendForApproval(1L);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
-        assertThat(workOrder.sentForApprovalAt).isNotNull();
+        assertThat(workOrder.getSentForApprovalAt()).isNotNull();
     }
 
     @Test
     void approve_fromAwaitingApproval_shouldChangeStatus() {
-        workOrder.status = WorkOrderStatus.AWAITING_APPROVAL;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         WorkOrderResponseDto result = workOrderService.approve(1L);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.IN_EXECUTION);
-        assertThat(workOrder.approvedAt).isNotNull();
+        assertThat(workOrder.getApprovedAt()).isNotNull();
     }
 
     @Test
     void reject_fromAwaitingApproval_shouldCancelOrder() {
-        workOrder.status = WorkOrderStatus.AWAITING_APPROVAL;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         WorkOrderResponseDto result = workOrderService.reject(1L);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.CANCELLED);
-        assertThat(workOrder.cancelledAt).isNotNull();
+        assertThat(workOrder.getCancelledAt()).isNotNull();
     }
 
     @Test
     void complete_fromInExecution_shouldChangeStatus() {
-        workOrder.status = WorkOrderStatus.IN_EXECUTION;
-        workOrder.executionStartedAt = LocalDateTime.now();
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_EXECUTION);
+        DomainTestFixtures.setField(workOrder, "executionStartedAt", LocalDateTime.now());
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         WorkOrderResponseDto result = workOrderService.complete(1L);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.FINISHED);
-        assertThat(workOrder.finishedAt).isNotNull();
+        assertThat(workOrder.getFinishedAt()).isNotNull();
     }
 
     @Test
     void deliver_fromFinished_shouldChangeStatus() {
-        workOrder.status = WorkOrderStatus.FINISHED;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.FINISHED);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         WorkOrderResponseDto result = workOrderService.deliver(1L);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.DELIVERED);
-        assertThat(workOrder.deliveredAt).isNotNull();
+        assertThat(workOrder.getDeliveredAt()).isNotNull();
     }
 
     @Test
     void cancel_fromAnyEditableStatus_shouldCancel() {
-        workOrder.status = WorkOrderStatus.IN_DIAGNOSIS;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         WorkOrderResponseDto result = workOrderService.cancel(1L);
@@ -252,7 +234,7 @@ class WorkOrderServiceTest {
 
     @Test
     void cancel_fromDelivered_shouldThrow() {
-        workOrder.status = WorkOrderStatus.DELIVERED;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.DELIVERED);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
 
         assertThatThrownBy(() -> workOrderService.cancel(1L))
@@ -261,47 +243,45 @@ class WorkOrderServiceTest {
 
     @Test
     void addPart_toEditableOrder_shouldDecrementStock() {
-        workOrder.status = WorkOrderStatus.IN_DIAGNOSIS;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
         when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
 
         WorkOrderPartDto dto = new WorkOrderPartDto(1L, 2);
         workOrderService.addPart(1L, dto);
 
-        assertThat(part.stockQuantity).isEqualTo(8);
-        assertThat(workOrder.parts).hasSize(1);
+        assertThat(part.getStockQuantity()).isEqualTo(8);
+        assertThat(workOrder.getParts()).hasSize(1);
     }
 
     @Test
     void addPart_withInsufficientStock_shouldThrow() {
-        workOrder.status = WorkOrderStatus.IN_DIAGNOSIS;
-        part.stockQuantity = 1;
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
+        DomainTestFixtures.setField(part, "stockQuantity", 1);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
         when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
 
         WorkOrderPartDto dto = new WorkOrderPartDto(1L, 5);
 
         assertThatThrownBy(() -> workOrderService.addPart(1L, dto))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(BusinessException.class);
     }
 
     @Test
     void addService_toEditableOrder_shouldAddWithBasePrice() {
-        workOrder.status = WorkOrderStatus.RECEIVED;
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
         when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(serviceItem));
 
         WorkOrderServiceDto dto = new WorkOrderServiceDto(1L, null);
         workOrderService.addService(1L, dto);
 
-        assertThat(workOrder.services).hasSize(1);
-        assertThat(workOrder.services.getFirst().price).isEqualByComparingTo("120.00");
+        assertThat(workOrder.getServices()).hasSize(1);
+        assertThat(workOrder.getServices().getFirst().getPrice()).isEqualByComparingTo("120.00");
     }
 
     @Test
     void addService_withInactiveService_shouldThrowBusinessException() {
-        serviceItem.active = false;
-        workOrder.status = WorkOrderStatus.RECEIVED;
+        serviceItem.deactivate();
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
         when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(serviceItem));
 
@@ -313,9 +293,87 @@ class WorkOrderServiceTest {
     }
 
     @Test
-    void addPart_toFinishedOrder_shouldThrowBusinessException() {
-        workOrder.status = WorkOrderStatus.FINISHED;
+    void reject_shouldRestoreStockOfAllParts() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
+        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+
+        workOrderService.addPart(1L, new WorkOrderPartDto(1L, 3));
+        assertThat(part.getStockQuantity()).isEqualTo(7);
+
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        workOrderService.reject(1L);
+
+        assertThat(part.getStockQuantity()).isEqualTo(10);
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.CANCELLED);
+    }
+
+    @Test
+    void approveByOrderNumber_withMatchingCpfCnpj_shouldApprove() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        WorkOrderResponseDto result = workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35");
+
+        assertThat(result.status()).isEqualTo(WorkOrderStatus.IN_EXECUTION);
+    }
+
+    @Test
+    void approveByOrderNumber_withWrongCpfCnpj_shouldThrowNotFound() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        assertThatThrownBy(() -> workOrderService.approveByOrderNumber("OS-000001", "529.982.247-25"))
+            .isInstanceOf(ResourceNotFoundException.class);
+        // Status não pode ter mudado
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    void rejectByOrderNumber_withMatchingCpfCnpj_shouldRejectAndRestoreStock() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
+        when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
+        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        workOrderService.addPart(1L, new WorkOrderPartDto(1L, 3));
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        WorkOrderResponseDto result = workOrderService.rejectByOrderNumber("OS-000001", "11144477735");
+
+        assertThat(result.status()).isEqualTo(WorkOrderStatus.CANCELLED);
+        assertThat(part.getStockQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    void rejectByOrderNumber_withWrongCpfCnpj_shouldThrowNotFound() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        assertThatThrownBy(() -> workOrderService.rejectByOrderNumber("OS-000001", "529.982.247-25"))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    void cancel_shouldRestoreStockOfAllParts() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
+        when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
+        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+
+        workOrderService.addPart(1L, new WorkOrderPartDto(1L, 4));
+        assertThat(part.getStockQuantity()).isEqualTo(6);
+
+        workOrderService.cancel(1L);
+
+        assertThat(part.getStockQuantity()).isEqualTo(10);
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.CANCELLED);
+    }
+
+    @Test
+    void addPart_toFinishedOrder_shouldThrowBusinessException() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.FINISHED);
+        when(workOrderRepository.findByIdOptional(1L)).thenReturn(Optional.of(workOrder));
+        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
 
         WorkOrderPartDto dto = new WorkOrderPartDto(1L, 1);
 

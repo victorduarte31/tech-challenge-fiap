@@ -38,25 +38,27 @@ public record WorkOrderResponseDto(
     ) {}
 
     public static WorkOrderResponseDto from(WorkOrder wo) {
-        List<WorkOrderPartSummaryDto> partDtos = wo.parts.stream()
+        List<WorkOrderPartSummaryDto> partDtos = wo.getParts().stream()
             .map(p -> new WorkOrderPartSummaryDto(
-                p.id, p.part.name, p.quantity, p.unitPrice, p.getSubtotal()
+                p.getId(), p.getPart().getName(), p.getQuantity(), p.getUnitPrice(), p.getSubtotal()
             ))
             .toList();
 
-        List<WorkOrderServiceSummaryDto> serviceDtos = wo.services.stream()
+        List<WorkOrderServiceSummaryDto> serviceDtos = wo.getServices().stream()
             .map(s -> new WorkOrderServiceSummaryDto(
-                s.id, s.serviceItem.name, s.price, s.notes
+                s.getId(), s.getServiceItem().getName(), s.getPrice(), s.getNotes()
             ))
             .toList();
 
         return new WorkOrderResponseDto(
-            wo.id, wo.orderNumber, wo.status,
-            wo.client.name, wo.client.cpfCnpj,
-            wo.vehicle.licensePlate, wo.vehicle.brand, wo.vehicle.model, wo.vehicle.productionYear,
-            wo.notes, wo.totalCost,
-            wo.createdAt, wo.diagnosisStartedAt, wo.sentForApprovalAt,
-            wo.approvedAt, wo.executionStartedAt, wo.finishedAt, wo.deliveredAt, wo.cancelledAt,
+            wo.getId(), wo.getOrderNumber(), wo.getStatus(),
+            wo.getClient().getName(), wo.getClient().getCpfCnpj(),
+            wo.getVehicle().getLicensePlate(), wo.getVehicle().getBrand(), wo.getVehicle().getModel(),
+            wo.getVehicle().getProductionYear(),
+            wo.getNotes(), wo.getTotalCost(),
+            wo.getCreatedAt(), wo.getDiagnosisStartedAt(), wo.getSentForApprovalAt(),
+            wo.getApprovedAt(), wo.getExecutionStartedAt(), wo.getFinishedAt(),
+            wo.getDeliveredAt(), wo.getCancelledAt(),
             partDtos, serviceDtos
         );
     }

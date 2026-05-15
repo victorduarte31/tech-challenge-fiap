@@ -189,16 +189,30 @@ class WorkOrderResourceTest {
 
     @Test
     @Order(11)
-    void publicApprove_shouldChangeStatusToInExecution() {
+    void publicApprove_withWrongCpfCnpj_shouldReturn404() {
         given()
-            .when().post("/public/work-orders/" + workOrderId + "/approve")
+            .contentType(ContentType.JSON)
+            .body("{\"clientCpfCnpj\": \"529.982.247-25\"}")
+            .when().post("/public/work-orders/" + workOrderNumber + "/approve")
             .then()
-            .statusCode(200)
-            .body("status", equalTo("IN_EXECUTION"));
+            .statusCode(404);
     }
 
     @Test
     @Order(12)
+    void publicApprove_withMatchingCpfCnpj_shouldChangeStatusToInExecution() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("{\"clientCpfCnpj\": \"356.492.810-33\"}")
+            .when().post("/public/work-orders/" + workOrderNumber + "/approve")
+            .then()
+            .statusCode(200)
+            .body("status", equalTo("IN_EXECUTION"))
+            .body("orderNumber", equalTo(workOrderNumber));
+    }
+
+    @Test
+    @Order(13)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
     void complete_shouldChangeStatus() {
         given()
@@ -209,7 +223,7 @@ class WorkOrderResourceTest {
     }
 
     @Test
-    @Order(13)
+    @Order(14)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
     void deliver_shouldChangeStatus() {
         given()
@@ -220,7 +234,7 @@ class WorkOrderResourceTest {
     }
 
     @Test
-    @Order(14)
+    @Order(15)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
     void listAll_shouldIncludeCreatedOrder() {
         given()
@@ -231,7 +245,7 @@ class WorkOrderResourceTest {
     }
 
     @Test
-    @Order(15)
+    @Order(16)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
     void getMetrics_shouldReturnValidData() {
         given()
