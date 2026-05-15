@@ -2,6 +2,7 @@ package br.com.oficina.infrastructure.security;
 
 import br.com.oficina.application.dto.LoginRequestDto;
 import br.com.oficina.application.dto.LoginResponseDto;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import io.quarkus.elytron.security.common.BcryptUtil;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.InjectMock;
@@ -25,12 +26,8 @@ class AuthServiceTest {
 
     @Test
     void login_withValidCredentials_shouldReturnToken() {
-        AppUser user = new AppUser();
-        user.id = 1L;
-        user.username = "admin";
-        user.password = BcryptUtil.bcryptHash("admin123");
-        user.role = "ADMIN";
-        user.active = true;
+        AppUser user = new AppUser("admin", BcryptUtil.bcryptHash("admin123"), "ADMIN");
+        DomainTestFixtures.setId(user, 1L);
 
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
 
@@ -45,11 +42,7 @@ class AuthServiceTest {
 
     @Test
     void login_withWrongPassword_shouldThrowNotAuthorized() {
-        AppUser user = new AppUser();
-        user.username = "admin";
-        user.password = BcryptUtil.bcryptHash("admin123");
-        user.role = "ADMIN";
-        user.active = true;
+        AppUser user = new AppUser("admin", BcryptUtil.bcryptHash("admin123"), "ADMIN");
 
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
 
@@ -72,11 +65,8 @@ class AuthServiceTest {
 
     @Test
     void login_withInactiveUser_shouldThrowNotAuthorized() {
-        AppUser user = new AppUser();
-        user.username = "admin";
-        user.password = BcryptUtil.bcryptHash("admin123");
-        user.role = "ADMIN";
-        user.active = false;
+        AppUser user = new AppUser("admin", BcryptUtil.bcryptHash("admin123"), "ADMIN");
+        user.deactivate();
 
         when(appUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
 

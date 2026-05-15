@@ -41,22 +41,22 @@ public class AuthService {
         // Comparação em tempo constante evita timing attacks que vazam usuários válidos
         boolean validPassword = BcryptUtil.matches(
             request.password(),
-            userOpt.map(u -> u.password).orElse(DUMMY_HASH)
+            userOpt.map(AppUser::getPassword).orElse(DUMMY_HASH)
         );
 
-        if (userOpt.isEmpty() || !validPassword || !Boolean.TRUE.equals(userOpt.get().active)) {
+        if (userOpt.isEmpty() || !validPassword || !userOpt.get().isActive()) {
             LOG.warnf("Tentativa de login inválida para usuário=%s", request.username());
             throw new NotAuthorizedException(INVALID_CREDENTIALS, "Bearer");
         }
 
         AppUser user = userOpt.get();
         String token = Jwt.issuer(issuer)
-            .subject(user.username)
-            .groups(Set.of(user.role))
+            .subject(user.getUsername())
+            .groups(Set.of(user.getRole()))
             .expiresIn(Duration.ofHours(expirationHours))
             .sign();
 
-        return new LoginResponseDto(token, user.username, user.role, expirationHours * 3600);
+        return new LoginResponseDto(token, user.getUsername(), user.getRole(), expirationHours * 3600);
     }
 
     @Transactional
@@ -64,11 +64,7 @@ public class AuthService {
         if (userRepository.findByUsername(username).isPresent()) {
             throw new IllegalArgumentException("Usuário já existe: " + username);
         }
-        AppUser user = new AppUser();
-        user.username = username;
-        user.password = BcryptUtil.bcryptHash(rawPassword);
-        user.role = role;
-        user.active = true;
+        AppUser user = new AppUser(username, BcryptUtil.bcryptHash(rawPassword), role);
         userRepository.persist(user);
     }
 }

@@ -10,26 +10,60 @@ public class AppUser {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    private Long id;
 
     @Column(nullable = false, unique = true, length = 50)
-    public String username;
+    private String username;
 
     @JsonIgnore
     @Column(nullable = false)
-    public String password;
+    private String password;
 
     @Column(nullable = false, length = 20)
-    public String role;
+    private String role;
 
     @Column(nullable = false)
-    public Boolean active = true;
+    private Boolean active = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    public LocalDateTime createdAt;
+    private LocalDateTime createdAt;
+
+    protected AppUser() {
+        // Required by JPA
+    }
+
+    public AppUser(String username, String hashedPassword, String role) {
+        this.username = username;
+        this.password = hashedPassword;
+        this.role = role;
+        this.active = true;
+    }
 
     @PrePersist
     void prePersist() {
         createdAt = LocalDateTime.now();
     }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void changePassword(String newHashedPassword) {
+        this.password = newHashedPassword;
+    }
+
+    public boolean isActive() {
+        return Boolean.TRUE.equals(active);
+    }
+
+    public Long getId() { return id; }
+    public String getUsername() { return username; }
+    public String getPassword() { return password; }
+    public String getRole() { return role; }
+    public Boolean getActive() { return active; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
 }
