@@ -15,8 +15,8 @@ public record ServiceItemResponseDto(
 ) {
     public static ServiceItemResponseDto from(ServiceItem s) {
         return new ServiceItemResponseDto(
-            s.id, s.name, s.description, s.basePrice,
-            s.estimatedDurationMinutes, s.active, s.createdAt
+            s.getId(), s.getName(), s.getDescription(), s.getBasePrice(),
+            s.getEstimatedDurationMinutes(), s.getActive(), s.getCreatedAt()
         );
     }
 }

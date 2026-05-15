@@ -9,6 +9,7 @@ import br.com.oficina.domain.model.ClientType;
 import br.com.oficina.domain.model.Vehicle;
 import br.com.oficina.infrastructure.repository.ClientRepository;
 import br.com.oficina.infrastructure.repository.VehicleRepository;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,21 +37,13 @@ class VehicleServiceTest {
 
     @BeforeEach
     void setUp() {
-        client = new Client();
-        client.id = 1L;
-        client.name = "João";
-        client.cpfCnpj = "11144477735";
-        client.clientType = ClientType.PF;
+        client = new Client("João", "11144477735", ClientType.PF, null, null);
+        DomainTestFixtures.setId(client, 1L);
 
-        vehicle = new Vehicle();
-        vehicle.id = 1L;
-        vehicle.licensePlate = "ABC1234";
-        vehicle.brand = "Toyota";
-        vehicle.model = "Corolla";
-        vehicle.productionYear = 2020;
-        vehicle.client = client;
-        vehicle.createdAt = LocalDateTime.now();
-        vehicle.updatedAt = LocalDateTime.now();
+        vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, client);
+        DomainTestFixtures.setId(vehicle, 1L);
+        DomainTestFixtures.setField(vehicle, "createdAt", LocalDateTime.now());
+        DomainTestFixtures.setField(vehicle, "updatedAt", LocalDateTime.now());
     }
 
     @Test

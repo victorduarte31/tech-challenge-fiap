@@ -52,12 +52,7 @@ public class VehicleService {
         Client client = clientRepository.findByIdOptional(dto.clientId())
             .orElseThrow(() -> new ResourceNotFoundException("Cliente", dto.clientId()));
 
-        Vehicle vehicle = new Vehicle();
-        vehicle.licensePlate = normalized;
-        vehicle.brand = dto.brand();
-        vehicle.model = dto.model();
-        vehicle.productionYear = dto.productionYear();
-        vehicle.client = client;
+        Vehicle vehicle = new Vehicle(normalized, dto.brand(), dto.model(), dto.productionYear(), client);
         vehicleRepository.persist(vehicle);
         return VehicleResponseDto.from(vehicle);
     }
@@ -68,17 +63,13 @@ public class VehicleService {
             .orElseThrow(() -> new ResourceNotFoundException(VEICULO, id));
 
         String normalized = normalizeLicensePlate(dto.licensePlate());
-        if (!vehicle.licensePlate.equals(normalized) && vehicleRepository.existsByLicensePlate(normalized)) {
+        if (!vehicle.getLicensePlate().equals(normalized) && vehicleRepository.existsByLicensePlate(normalized)) {
             throw new BusinessException("Placa já cadastrada: " + dto.licensePlate());
         }
         Client client = clientRepository.findByIdOptional(dto.clientId())
             .orElseThrow(() -> new ResourceNotFoundException("Cliente", dto.clientId()));
 
-        vehicle.licensePlate = normalized;
-        vehicle.brand = dto.brand();
-        vehicle.model = dto.model();
-        vehicle.productionYear = dto.productionYear();
-        vehicle.client = client;
+        vehicle.update(normalized, dto.brand(), dto.model(), dto.productionYear(), client);
         return VehicleResponseDto.from(vehicle);
     }
 

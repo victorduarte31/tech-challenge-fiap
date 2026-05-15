@@ -39,12 +39,7 @@ public class ServiceItemService {
 
     @Transactional
     public ServiceItemResponseDto create(ServiceItemRequestDto dto) {
-        ServiceItem item = new ServiceItem();
-        item.name = dto.name();
-        item.description = dto.description();
-        item.basePrice = dto.basePrice();
-        item.estimatedDurationMinutes = dto.estimatedDurationMinutes();
-        item.active = true;
+        ServiceItem item = new ServiceItem(dto.name(), dto.description(), dto.basePrice(), dto.estimatedDurationMinutes());
         serviceItemRepository.persist(item);
         return ServiceItemResponseDto.from(item);
     }
@@ -53,10 +48,7 @@ public class ServiceItemService {
     public ServiceItemResponseDto update(Long id, ServiceItemRequestDto dto) {
         ServiceItem item = serviceItemRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException(SERVICO, id));
-        item.name = dto.name();
-        item.description = dto.description();
-        item.basePrice = dto.basePrice();
-        item.estimatedDurationMinutes = dto.estimatedDurationMinutes();
+        item.update(dto.name(), dto.description(), dto.basePrice(), dto.estimatedDurationMinutes());
         return ServiceItemResponseDto.from(item);
     }
 
@@ -64,7 +56,7 @@ public class ServiceItemService {
     public ServiceItemResponseDto deactivate(Long id) {
         ServiceItem item = serviceItemRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException(SERVICO, id));
-        item.active = false;
+        item.deactivate();
         return ServiceItemResponseDto.from(item);
     }
 

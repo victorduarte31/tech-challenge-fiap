@@ -5,6 +5,7 @@ import br.com.oficina.application.dto.ServiceItemResponseDto;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.ServiceItem;
 import br.com.oficina.infrastructure.repository.ServiceItemRepository;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,15 +33,11 @@ class ServiceItemServiceTest {
 
     @BeforeEach
     void setUp() {
-        sampleItem = new ServiceItem();
-        sampleItem.id = 1L;
-        sampleItem.name = "Troca de Óleo";
-        sampleItem.description = "Troca completa de óleo e filtro";
-        sampleItem.basePrice = new BigDecimal("120.00");
-        sampleItem.estimatedDurationMinutes = 30;
-        sampleItem.active = true;
-        sampleItem.createdAt = LocalDateTime.now();
-        sampleItem.updatedAt = LocalDateTime.now();
+        sampleItem = new ServiceItem("Troca de Óleo", "Troca completa de óleo e filtro",
+            new BigDecimal("120.00"), 30);
+        DomainTestFixtures.setId(sampleItem, 1L);
+        DomainTestFixtures.setField(sampleItem, "createdAt", LocalDateTime.now());
+        DomainTestFixtures.setField(sampleItem, "updatedAt", LocalDateTime.now());
     }
 
     @Test

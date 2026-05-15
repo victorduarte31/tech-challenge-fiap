@@ -9,29 +9,41 @@ public class Vehicle {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    private Long id;
 
     @Column(name = "license_plate", nullable = false, unique = true, length = 10)
-    public String licensePlate;
+    private String licensePlate;
 
     @Column(nullable = false, length = 50)
-    public String brand;
+    private String brand;
 
     @Column(nullable = false, length = 80)
-    public String model;
+    private String model;
 
     @Column(name = "production_year", nullable = false)
-    public Integer productionYear;
+    private Integer productionYear;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "client_id", nullable = false)
-    public Client client;
+    private Client client;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    public LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    public LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
+
+    protected Vehicle() {
+        // Required by JPA
+    }
+
+    public Vehicle(String licensePlate, String brand, String model, Integer productionYear, Client client) {
+        this.licensePlate = licensePlate;
+        this.brand = brand;
+        this.model = model;
+        this.productionYear = productionYear;
+        this.client = client;
+    }
 
     @PrePersist
     void prePersist() {
@@ -43,4 +55,21 @@ public class Vehicle {
     void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public void update(String licensePlate, String brand, String model, Integer productionYear, Client client) {
+        this.licensePlate = licensePlate;
+        this.brand = brand;
+        this.model = model;
+        this.productionYear = productionYear;
+        this.client = client;
+    }
+
+    public Long getId() { return id; }
+    public String getLicensePlate() { return licensePlate; }
+    public String getBrand() { return brand; }
+    public String getModel() { return model; }
+    public Integer getProductionYear() { return productionYear; }
+    public Client getClient() { return client; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

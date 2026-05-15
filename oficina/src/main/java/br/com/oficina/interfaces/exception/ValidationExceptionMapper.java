@@ -4,7 +4,7 @@ import jakarta.validation.ConstraintViolationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -29,7 +29,7 @@ public class ValidationExceptionMapper implements ExceptionMapper<ConstraintViol
                 "status", 400,
                 "error", "Validation Error",
                 "violations", errors,
-                "timestamp", LocalDateTime.now().toString()
+                "timestamp", OffsetDateTime.now().toString()
             ))
             .build();
     }

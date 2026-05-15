@@ -10,28 +10,40 @@ public class ServiceItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    private Long id;
 
     @Column(nullable = false, length = 100)
-    public String name;
+    private String name;
 
-    @Column(length = 255)
-    public String description;
+    @Column
+    private String description;
 
     @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
-    public BigDecimal basePrice;
+    private BigDecimal basePrice;
 
     @Column(name = "estimated_duration_minutes", nullable = false)
-    public Integer estimatedDurationMinutes;
+    private Integer estimatedDurationMinutes;
 
     @Column(nullable = false)
-    public Boolean active = true;
+    private Boolean active = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    public LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    public LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
+
+    protected ServiceItem() {
+        // Required by JPA
+    }
+
+    public ServiceItem(String name, String description, BigDecimal basePrice, Integer estimatedDurationMinutes) {
+        this.name = name;
+        this.description = description;
+        this.basePrice = basePrice;
+        this.estimatedDurationMinutes = estimatedDurationMinutes;
+        this.active = true;
+    }
 
     @PrePersist
     void prePersist() {
@@ -43,4 +55,32 @@ public class ServiceItem {
     void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public void update(String name, String description, BigDecimal basePrice, Integer estimatedDurationMinutes) {
+        this.name = name;
+        this.description = description;
+        this.basePrice = basePrice;
+        this.estimatedDurationMinutes = estimatedDurationMinutes;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public boolean isActive() {
+        return Boolean.TRUE.equals(active);
+    }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public BigDecimal getBasePrice() { return basePrice; }
+    public Integer getEstimatedDurationMinutes() { return estimatedDurationMinutes; }
+    public Boolean getActive() { return active; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }
