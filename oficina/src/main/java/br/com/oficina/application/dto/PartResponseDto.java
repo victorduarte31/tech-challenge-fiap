@@ -15,7 +15,8 @@ public record PartResponseDto(
 ) {
     public static PartResponseDto from(Part p) {
         return new PartResponseDto(
-            p.id, p.name, p.description, p.unitPrice, p.stockQuantity, p.unit, p.createdAt
+            p.getId(), p.getName(), p.getDescription(), p.getUnitPrice(),
+            p.getStockQuantity(), p.getUnit(), p.getCreatedAt()
         );
     }
 }

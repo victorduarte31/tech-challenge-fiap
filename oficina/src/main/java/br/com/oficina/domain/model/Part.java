@@ -1,5 +1,6 @@
 package br.com.oficina.domain.model;
 
+import br.com.oficina.domain.exception.BusinessException;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -10,28 +11,40 @@ public class Part {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    private Long id;
 
     @Column(nullable = false, length = 100)
-    public String name;
+    private String name;
 
-    @Column(length = 255)
-    public String description;
+    @Column
+    private String description;
 
     @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
-    public BigDecimal unitPrice;
+    private BigDecimal unitPrice;
 
     @Column(name = "stock_quantity", nullable = false)
-    public Integer stockQuantity;
+    private Integer stockQuantity;
 
     @Column(nullable = false, length = 10)
-    public String unit;
+    private String unit;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    public LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    public LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
+
+    protected Part() {
+        // Required by JPA
+    }
+
+    public Part(String name, String description, BigDecimal unitPrice, Integer stockQuantity, String unit) {
+        this.name = name;
+        this.description = description;
+        this.unitPrice = unitPrice;
+        this.stockQuantity = stockQuantity;
+        this.unit = unit;
+    }
 
     @PrePersist
     void prePersist() {
@@ -44,9 +57,17 @@ public class Part {
         updatedAt = LocalDateTime.now();
     }
 
+    public void update(String name, String description, BigDecimal unitPrice, Integer stockQuantity, String unit) {
+        this.name = name;
+        this.description = description;
+        this.unitPrice = unitPrice;
+        this.stockQuantity = stockQuantity;
+        this.unit = unit;
+    }
+
     public void decreaseStock(int quantity) {
         if (this.stockQuantity < quantity) {
-            throw new IllegalArgumentException(
+            throw new BusinessException(
                 "Estoque insuficiente para a peça '" + name + "'. Disponível: " + stockQuantity
             );
         }
@@ -56,4 +77,13 @@ public class Part {
     public void increaseStock(int quantity) {
         this.stockQuantity += quantity;
     }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public BigDecimal getUnitPrice() { return unitPrice; }
+    public Integer getStockQuantity() { return stockQuantity; }
+    public String getUnit() { return unit; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

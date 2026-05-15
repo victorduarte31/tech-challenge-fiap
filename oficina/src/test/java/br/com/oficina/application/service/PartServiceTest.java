@@ -2,9 +2,11 @@ package br.com.oficina.application.service;
 
 import br.com.oficina.application.dto.PartRequestDto;
 import br.com.oficina.application.dto.PartResponseDto;
+import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
 import br.com.oficina.infrastructure.repository.PartRepository;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,15 +34,10 @@ class PartServiceTest {
 
     @BeforeEach
     void setUp() {
-        samplePart = new Part();
-        samplePart.id = 1L;
-        samplePart.name = "Óleo Motor 5W30";
-        samplePart.description = "1 litro";
-        samplePart.unitPrice = new BigDecimal("45.90");
-        samplePart.stockQuantity = 20;
-        samplePart.unit = "L";
-        samplePart.createdAt = LocalDateTime.now();
-        samplePart.updatedAt = LocalDateTime.now();
+        samplePart = new Part("Óleo Motor 5W30", "1 litro", new BigDecimal("45.90"), 20, "L");
+        DomainTestFixtures.setId(samplePart, 1L);
+        DomainTestFixtures.setField(samplePart, "createdAt", LocalDateTime.now());
+        DomainTestFixtures.setField(samplePart, "updatedAt", LocalDateTime.now());
     }
 
     @Test
@@ -132,7 +129,7 @@ class PartServiceTest {
         when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
 
         assertThatThrownBy(() -> partService.adjustStock(1L, -30))
-            .isInstanceOf(IllegalArgumentException.class)
+            .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Estoque insuficiente");
     }
 

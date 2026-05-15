@@ -39,12 +39,7 @@ public class PartService {
 
     @Transactional
     public PartResponseDto create(PartRequestDto dto) {
-        Part part = new Part();
-        part.name = dto.name();
-        part.description = dto.description();
-        part.unitPrice = dto.unitPrice();
-        part.stockQuantity = dto.stockQuantity();
-        part.unit = dto.unit();
+        Part part = new Part(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit());
         partRepository.persist(part);
         return PartResponseDto.from(part);
     }
@@ -53,11 +48,7 @@ public class PartService {
     public PartResponseDto update(Long id, PartRequestDto dto) {
         Part part = partRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
-        part.name = dto.name();
-        part.description = dto.description();
-        part.unitPrice = dto.unitPrice();
-        part.stockQuantity = dto.stockQuantity();
-        part.unit = dto.unit();
+        part.update(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit());
         return PartResponseDto.from(part);
     }
 

@@ -66,7 +66,12 @@ public class PartResource {
 
     @PATCH
     @Path("/{id}/stock")
-    @Operation(summary = "Ajustar estoque (positivo=entrada, negativo=saída)")
+    @RolesAllowed("ADMIN")
+    @Operation(
+        summary = "Ajustar estoque (positivo=entrada, negativo=saída) — somente ADMIN",
+        description = "Operação restrita a ADMIN. Mecânicos consomem estoque indiretamente ao adicionar peças à OS; " +
+                      "ajustes manuais de entrada/saída (compra, devolução, perda) são responsabilidade administrativa."
+    )
     public PartResponseDto adjustStock(@PathParam("id") Long id, @QueryParam("adjustment") int adjustment) {
         return partService.adjustStock(id, adjustment);
     }
