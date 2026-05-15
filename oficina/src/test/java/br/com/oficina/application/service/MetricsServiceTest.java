@@ -1,10 +1,15 @@
 package br.com.oficina.application.service;
 
 import br.com.oficina.application.dto.MetricsResponseDto;
+import br.com.oficina.domain.model.Client;
+import br.com.oficina.domain.model.ClientType;
+import br.com.oficina.domain.model.Part;
+import br.com.oficina.domain.model.Vehicle;
 import br.com.oficina.domain.model.WorkOrder;
 import br.com.oficina.domain.model.WorkOrderStatus;
 import br.com.oficina.infrastructure.repository.PartRepository;
 import br.com.oficina.infrastructure.repository.WorkOrderRepository;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -12,7 +17,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
@@ -27,29 +31,26 @@ class MetricsServiceTest {
     @InjectMocks
     MetricsService metricsService;
 
-    private WorkOrder buildWorkOrder(WorkOrderStatus status, int execMinutes) {
-        WorkOrder wo = new WorkOrder();
-        wo.status = status;
-        wo.totalCost = status == WorkOrderStatus.DELIVERED ? new BigDecimal("500.00") : BigDecimal.ZERO;
-        wo.parts = new ArrayList<>();
-        wo.services = new ArrayList<>();
-        if (execMinutes > 0) {
-            wo.executionStartedAt = LocalDateTime.now().minusMinutes(execMinutes);
-            wo.finishedAt = LocalDateTime.now();
-        }
+    private WorkOrder buildWorkOrderWithExecTime(int execMinutes) {
+        Client client = new Client("Test", "11144477735", ClientType.PF, null, null);
+        Vehicle vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, client);
+        WorkOrder wo = new WorkOrder(client, vehicle, null);
+        DomainTestFixtures.setField(wo, "status", WorkOrderStatus.FINISHED);
+        DomainTestFixtures.setField(wo, "executionStartedAt", LocalDateTime.now().minusMinutes(execMinutes));
+        DomainTestFixtures.setField(wo, "finishedAt", LocalDateTime.now());
         return wo;
     }
 
     @Test
     void getMetrics_shouldCalculateCorrectly() {
-        List<WorkOrder> orders = List.of(
-            buildWorkOrder(WorkOrderStatus.RECEIVED, 0),
-            buildWorkOrder(WorkOrderStatus.IN_DIAGNOSIS, 0),
-            buildWorkOrder(WorkOrderStatus.FINISHED, 60),
-            buildWorkOrder(WorkOrderStatus.DELIVERED, 120),
-            buildWorkOrder(WorkOrderStatus.CANCELLED, 0)
+        when(workOrderRepository.count()).thenReturn(5L);
+        when(workOrderRepository.countOpen()).thenReturn(2L);
+        when(workOrderRepository.countFinished()).thenReturn(2L);
+        when(workOrderRepository.countCancelled()).thenReturn(1L);
+        when(workOrderRepository.sumRevenueDelivered()).thenReturn(new BigDecimal("500.00"));
+        when(workOrderRepository.findWithExecutionTime()).thenReturn(
+            List.of(buildWorkOrderWithExecTime(60), buildWorkOrderWithExecTime(120))
         );
-        when(workOrderRepository.listAll()).thenReturn(orders);
         when(partRepository.findLowStock(5)).thenReturn(List.of());
 
         MetricsResponseDto result = metricsService.getMetrics();
@@ -64,7 +65,12 @@ class MetricsServiceTest {
 
     @Test
     void getMetrics_withNoOrders_shouldReturnZeros() {
-        when(workOrderRepository.listAll()).thenReturn(List.of());
+        when(workOrderRepository.count()).thenReturn(0L);
+        when(workOrderRepository.countOpen()).thenReturn(0L);
+        when(workOrderRepository.countFinished()).thenReturn(0L);
+        when(workOrderRepository.countCancelled()).thenReturn(0L);
+        when(workOrderRepository.sumRevenueDelivered()).thenReturn(BigDecimal.ZERO);
+        when(workOrderRepository.findWithExecutionTime()).thenReturn(List.of());
         when(partRepository.findLowStock(5)).thenReturn(List.of());
 
         MetricsResponseDto result = metricsService.getMetrics();
@@ -76,11 +82,15 @@ class MetricsServiceTest {
 
     @Test
     void getMetrics_withLowStockParts_shouldCountCorrectly() {
-        when(workOrderRepository.listAll()).thenReturn(List.of());
-        when(partRepository.findLowStock(5)).thenReturn(List.of(
-            new br.com.oficina.domain.model.Part(),
-            new br.com.oficina.domain.model.Part()
-        ));
+        when(workOrderRepository.count()).thenReturn(0L);
+        when(workOrderRepository.countOpen()).thenReturn(0L);
+        when(workOrderRepository.countFinished()).thenReturn(0L);
+        when(workOrderRepository.countCancelled()).thenReturn(0L);
+        when(workOrderRepository.sumRevenueDelivered()).thenReturn(BigDecimal.ZERO);
+        when(workOrderRepository.findWithExecutionTime()).thenReturn(List.of());
+        Part p1 = new Part("p1", null, BigDecimal.ONE, 1, "UN");
+        Part p2 = new Part("p2", null, BigDecimal.ONE, 1, "UN");
+        when(partRepository.findLowStock(5)).thenReturn(List.of(p1, p2));
 
         MetricsResponseDto result = metricsService.getMetrics();
 
