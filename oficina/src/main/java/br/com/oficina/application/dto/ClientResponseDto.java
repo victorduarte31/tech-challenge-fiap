@@ -15,7 +15,8 @@ public record ClientResponseDto(
 ) {
     public static ClientResponseDto from(Client c) {
         return new ClientResponseDto(
-            c.id, c.name, c.cpfCnpj, c.clientType, c.email, c.phone, c.createdAt
+            c.getId(), c.getName(), c.getCpfCnpj(), c.getClientType(),
+            c.getEmail(), c.getPhone(), c.getCreatedAt()
         );
     }
 }

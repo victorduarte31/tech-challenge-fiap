@@ -7,6 +7,7 @@ import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Client;
 import br.com.oficina.domain.model.ClientType;
 import br.com.oficina.infrastructure.repository.ClientRepository;
+import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,15 +34,10 @@ class ClientServiceTest {
 
     @BeforeEach
     void setUp() {
-        sampleClient = new Client();
-        sampleClient.id = 1L;
-        sampleClient.name = "João Silva";
-        sampleClient.cpfCnpj = "11144477735";
-        sampleClient.clientType = ClientType.PF;
-        sampleClient.email = "joao@example.com";
-        sampleClient.phone = "11999999999";
-        sampleClient.createdAt = LocalDateTime.now();
-        sampleClient.updatedAt = LocalDateTime.now();
+        sampleClient = new Client("João Silva", "11144477735", ClientType.PF, "joao@example.com", "11999999999");
+        DomainTestFixtures.setId(sampleClient, 1L);
+        DomainTestFixtures.setField(sampleClient, "createdAt", LocalDateTime.now());
+        DomainTestFixtures.setField(sampleClient, "updatedAt", LocalDateTime.now());
     }
 
     @Test

@@ -45,12 +45,7 @@ public class ClientService {
         if (clientRepository.existsByCpfCnpj(normalized)) {
             throw new BusinessException("CPF/CNPJ já cadastrado: " + dto.cpfCnpj());
         }
-        Client client = new Client();
-        client.name = dto.name();
-        client.cpfCnpj = normalized;
-        client.clientType = dto.clientType();
-        client.email = dto.email();
-        client.phone = dto.phone();
+        Client client = new Client(dto.name(), normalized, dto.clientType(), dto.email(), dto.phone());
         clientRepository.persist(client);
         return ClientResponseDto.from(client);
     }
@@ -61,14 +56,10 @@ public class ClientService {
             .orElseThrow(() -> new ResourceNotFoundException(CLIENTE, id));
 
         String normalized = CpfCnpjUtils.normalize(dto.cpfCnpj());
-        if (!client.cpfCnpj.equals(normalized) && clientRepository.existsByCpfCnpj(normalized)) {
+        if (!client.getCpfCnpj().equals(normalized) && clientRepository.existsByCpfCnpj(normalized)) {
             throw new BusinessException("CPF/CNPJ já cadastrado: " + dto.cpfCnpj());
         }
-        client.name = dto.name();
-        client.cpfCnpj = normalized;
-        client.clientType = dto.clientType();
-        client.email = dto.email();
-        client.phone = dto.phone();
+        client.update(dto.name(), normalized, dto.clientType(), dto.email(), dto.phone());
         return ClientResponseDto.from(client);
     }
 

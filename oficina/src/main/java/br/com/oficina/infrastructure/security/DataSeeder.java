@@ -60,11 +60,7 @@ public class DataSeeder {
             return generated;
         });
 
-        AppUser user = new AppUser();
-        user.username = username;
-        user.password = BcryptUtil.bcryptHash(password);
-        user.role = role;
-        user.active = true;
+        AppUser user = new AppUser(username, BcryptUtil.bcryptHash(password), role);
         userRepository.persist(user);
         LOG.infof("Usuário inicial criado: %s (%s)", username, role);
     }

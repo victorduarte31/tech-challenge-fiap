@@ -11,32 +11,44 @@ public class Client {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    public Long id;
+    private Long id;
 
     @Column(nullable = false)
-    public String name;
+    private String name;
 
     @Column(name = "cpf_cnpj", nullable = false, unique = true, length = 14)
-    public String cpfCnpj;
+    private String cpfCnpj;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "client_type", nullable = false, length = 2)
-    public ClientType clientType;
+    private ClientType clientType;
 
     @Column(length = 100)
-    public String email;
+    private String email;
 
     @Column(length = 20)
-    public String phone;
+    private String phone;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    public LocalDateTime createdAt;
+    private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    public LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    public List<Vehicle> vehicles = new ArrayList<>();
+    private final List<Vehicle> vehicles = new ArrayList<>();
+
+    protected Client() {
+        // Required by JPA
+    }
+
+    public Client(String name, String cpfCnpj, ClientType clientType, String email, String phone) {
+        this.name = name;
+        this.cpfCnpj = cpfCnpj;
+        this.clientType = clientType;
+        this.email = email;
+        this.phone = phone;
+    }
 
     @PrePersist
     void prePersist() {
@@ -48,4 +60,22 @@ public class Client {
     void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public void update(String name, String cpfCnpj, ClientType clientType, String email, String phone) {
+        this.name = name;
+        this.cpfCnpj = cpfCnpj;
+        this.clientType = clientType;
+        this.email = email;
+        this.phone = phone;
+    }
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getCpfCnpj() { return cpfCnpj; }
+    public ClientType getClientType() { return clientType; }
+    public String getEmail() { return email; }
+    public String getPhone() { return phone; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public List<Vehicle> getVehicles() { return vehicles; }
 }
