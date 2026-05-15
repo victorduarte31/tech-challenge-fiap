@@ -123,24 +123,46 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → FINISHED �
                                  CANCELLED
 ```
 
-| Ação                 | Endpoint                              | Papel         |
-|---------------------|---------------------------------------|---------------|
-| Criar OS             | POST /admin/work-orders               | ADMIN/MECHANIC|
-| Iniciar diagnóstico  | PATCH /admin/work-orders/{id}/start-diagnosis | ADMIN/MECHANIC|
-| Enviar orçamento     | PATCH /admin/work-orders/{id}/send-for-approval | ADMIN/MECHANIC|
-| Cliente aprova       | POST /public/work-orders/{id}/approve | Público       |
-| Cliente rejeita      | POST /public/work-orders/{id}/reject  | Público       |
-| Concluir execução    | PATCH /admin/work-orders/{id}/complete | ADMIN/MECHANIC|
-| Registrar entrega    | PATCH /admin/work-orders/{id}/deliver | ADMIN/MECHANIC|
-| Cancelar             | PATCH /admin/work-orders/{id}/cancel  | ADMIN         |
+| Ação                          | Endpoint                                                | Papel          |
+|-------------------------------|---------------------------------------------------------|----------------|
+| Criar OS                      | `POST /admin/work-orders`                               | ADMIN/MECHANIC |
+| Iniciar diagnóstico           | `PATCH /admin/work-orders/{id}/start-diagnosis`         | ADMIN/MECHANIC |
+| Enviar orçamento              | `PATCH /admin/work-orders/{id}/send-for-approval`       | ADMIN/MECHANIC |
+| Cliente aprova (remoto)       | `POST /public/work-orders/{orderNumber}/approve`        | Público (¹)    |
+| Cliente rejeita (remoto)      | `POST /public/work-orders/{orderNumber}/reject`         | Público (¹)    |
+| Aprovar (registro presencial) | `PATCH /admin/work-orders/{id}/approve`                 | ADMIN/MECHANIC |
+| Rejeitar (registro presencial)| `PATCH /admin/work-orders/{id}/reject`                  | ADMIN/MECHANIC |
+| Concluir execução             | `PATCH /admin/work-orders/{id}/complete`                | ADMIN/MECHANIC |
+| Registrar entrega             | `PATCH /admin/work-orders/{id}/deliver`                 | ADMIN/MECHANIC |
+| Cancelar                      | `PATCH /admin/work-orders/{id}/cancel`                  | ADMIN          |
+
+> (¹) **Approve/Reject — dois canais distintos**
+> - **Canal público** (`/public/work-orders/{orderNumber}/approve|reject`): destinado ao
+>   próprio cliente aprovar/rejeitar remotamente seu orçamento. Exige o número da OS e
+>   prova de identidade (CPF/CNPJ) no corpo da requisição.
+> - **Canal administrativo** (`/admin/work-orders/{id}/approve|reject`): destinado ao
+>   atendente registrar uma aprovação/rejeição feita **presencialmente ou por telefone**
+>   pelo cliente. Mantém auditoria via JWT do operador (ADMIN/MECHANIC).
 
 ## Endpoints Públicos (sem autenticação)
 
-| Método | Endpoint                                    | Descrição           |
-|--------|---------------------------------------------|---------------------|
-| GET    | /public/work-orders/{orderNumber}/status    | Consultar status da OS |
-| POST   | /public/work-orders/{id}/approve            | Aprovar orçamento   |
-| POST   | /public/work-orders/{id}/reject             | Rejeitar orçamento  |
+| Método | Endpoint                                          | Descrição                          |
+|--------|---------------------------------------------------|------------------------------------|
+| GET    | `/public/work-orders/{orderNumber}/status`        | Consultar status da OS             |
+| POST   | `/public/work-orders/{orderNumber}/approve`       | Aprovar orçamento (exige CPF/CNPJ) |
+| POST   | `/public/work-orders/{orderNumber}/reject`        | Rejeitar orçamento (exige CPF/CNPJ)|
+
+> **Aprovação/rejeição pública — exigência de identidade**
+> Os endpoints `approve`/`reject` exigem o CPF/CNPJ do cliente no corpo da requisição.
+> O sistema valida que esse documento bate com o cliente associado à OS — caso contrário
+> retorna `404` (mesma resposta de OS inexistente, para não distinguir cenários).
+>
+> Exemplo:
+> ```bash
+> curl -X POST http://localhost:8080/public/work-orders/OS-000001/approve \
+>   -H "Content-Type: application/json" \
+>   -d '{"clientCpfCnpj": "111.444.777-35"}'
+> ```
 
 ## Executando os Testes
 
@@ -165,7 +187,7 @@ src/main/java/br/com/oficina/
 │   ├── dto/            # Data Transfer Objects (request/response)
 │   └── service/        # Serviços de aplicação (regras de negócio)
 ├── infrastructure/
-│   ├── persistence/    # Repositórios Panache
+│   ├── repository/     # Repositórios Panache
 │   ├── security/       # Autenticação JWT, AppUser
 │   └── validation/     # Validadores de CPF/CNPJ e placa
 └── interfaces/

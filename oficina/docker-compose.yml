@@ -31,6 +31,7 @@ services:
       dockerfile: Dockerfile
     container_name: oficina_app
     environment:
+      QUARKUS_PROFILE: docker
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-oficina_db}

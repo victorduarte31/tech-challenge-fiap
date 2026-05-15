@@ -54,4 +54,5 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
     CMD wget -qO- http://localhost:8080/q/health/live || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["java", "-jar", "/app/quarkus-run.jar"]
+# Shell form: expande ${JAVA_OPTS} em tempo de execução antes de lançar a JVM
+CMD ["/bin/sh", "-c", "exec java ${JAVA_OPTS} -jar /app/quarkus-run.jar"]

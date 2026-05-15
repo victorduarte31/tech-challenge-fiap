@@ -4,21 +4,21 @@
 
 A linguagem ubíqua estabelece um vocabulário compartilhado entre especialistas de domínio e desenvolvedores.
 
-| Termo                    | Definição                                                                                      |
-|--------------------------|-----------------------------------------------------------------------------------------------|
-| **Ordem de Serviço (OS)**| Documento que registra todos os serviços e peças relacionados ao atendimento de um veículo. Possui um ciclo de vida bem definido com status. |
-| **Cliente**              | Pessoa física (CPF) ou jurídica (CNPJ) que solicita serviços da oficina.                      |
-| **Veículo**              | Automóvel identificado por placa, marca, modelo e ano pertencente a um cliente.               |
-| **Diagnóstico**          | Análise técnica realizada pelo mecânico para identificar problemas no veículo.                |
-| **Orçamento**            | Estimativa de custo calculada automaticamente com base nos serviços e peças da OS.            |
-| **Aprovação**            | Autorização do cliente para execução dos serviços após recebimento do orçamento.             |
-| **Peça/Insumo**          | Material consumido na execução do serviço (ex.: óleo, filtro, pastilha de freio).            |
-| **Estoque**              | Quantidade disponível de peças e insumos para uso nas ordens de serviço.                      |
-| **Catálogo de Serviços** | Conjunto de serviços oferecidos pela oficina com preço base e duração estimada.              |
-| **Mecânico**             | Profissional responsável pelo diagnóstico e execução dos serviços.                            |
-| **Entrega**              | Devolução do veículo ao cliente após conclusão dos serviços.                                 |
-| **Status da OS**         | Estado atual da ordem de serviço no seu ciclo de vida.                                       |
-| **Tempo de Execução**    | Duração entre o início da execução e a conclusão dos serviços.                               |
+| Termo                     | Definição                                                                                                                                    |
+|---------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ordem de Serviço (OS)** | Documento que registra todos os serviços e peças relacionados ao atendimento de um veículo. Possui um ciclo de vida bem definido com status. |
+| **Cliente**               | Pessoa física (CPF) ou jurídica (CNPJ) que solicita serviços da oficina.                                                                     |
+| **Veículo**               | Automóvel identificado por placa, marca, modelo e ano pertencente a um cliente.                                                              |
+| **Diagnóstico**           | Análise técnica realizada pelo mecânico para identificar problemas no veículo.                                                               |
+| **Orçamento**             | Estimativa de custo calculada automaticamente com base nos serviços e peças da OS.                                                           |
+| **Aprovação**             | Autorização do cliente para execução dos serviços após recebimento do orçamento.                                                             |
+| **Peça/Insumo**           | Material consumido na execução do serviço (ex.: óleo, filtro, pastilha de freio).                                                            |
+| **Estoque**               | Quantidade disponível de peças e insumos para uso nas ordens de serviço.                                                                     |
+| **Catálogo de Serviços**  | Conjunto de serviços oferecidos pela oficina com preço base e duração estimada.                                                              |
+| **Mecânico**              | Profissional responsável pelo diagnóstico e execução dos serviços.                                                                           |
+| **Entrega**               | Devolução do veículo ao cliente após conclusão dos serviços.                                                                                 |
+| **Status da OS**          | Estado atual da ordem de serviço no seu ciclo de vida.                                                                                       |
+| **Tempo de Execução**     | Duração entre o início da execução e a conclusão dos serviços.                                                                               |
 
 ---
 
@@ -44,9 +44,11 @@ A linguagem ubíqua estabelece um vocabulário compartilhado entre especialistas
 ```
 
 ### Core Domain: Ordens de Serviço
+
 O domínio central do sistema — gerencia o ciclo de vida completo das OS.
 
 ### Supporting Domains:
+
 - **Gestão de Clientes e Veículos**: CRUD de clientes (CPF/CNPJ) e seus veículos.
 - **Catálogo de Serviços e Peças**: Gestão do catálogo de serviços oferecidos e estoque de peças.
 - **Segurança e Autenticação**: JWT, controle de acesso por papel.
@@ -56,6 +58,7 @@ O domínio central do sistema — gerencia o ciclo de vida completo das OS.
 ## 3. Aggregates, Entities e Value Objects
 
 ### Aggregate: WorkOrder (Raiz)
+
 ```
 WorkOrder (Aggregate Root)
 ├── id: Long
@@ -71,6 +74,7 @@ WorkOrder (Aggregate Root)
 ```
 
 ### Aggregate: Client
+
 ```
 Client (Aggregate Root)
 ├── id: Long
@@ -83,6 +87,7 @@ Client (Aggregate Root)
 ```
 
 ### Aggregate: Part (Estoque)
+
 ```
 Part (Aggregate Root)
 ├── id: Long
@@ -93,6 +98,7 @@ Part (Aggregate Root)
 ```
 
 ### Domain Services
+
 - `WorkOrder.startDiagnosis()` — transição de estado
 - `WorkOrder.sendForApproval()` — calcula totalCost antes da transição
 - `WorkOrder.approve() / reject()` — controle de aprovação do cliente
@@ -157,6 +163,17 @@ Consultar Estoque  →  EstoqueBaixoDetectado      → Alerta para reposição
 ---
 
 ## 5. Diagrama de Estado da OS
+
+> **Nota sobre o status `CANCELLED`**
+> O Tech Challenge lista 6 status no ciclo de vida da OS (`RECEIVED`, `IN_DIAGNOSIS`,
+> `AWAITING_APPROVAL`, `IN_EXECUTION`, `FINISHED`, `DELIVERED`) — todos representando o
+> *fluxo feliz*. Adotamos um sétimo status, `CANCELLED`, para modelar explicitamente a
+> rejeição do orçamento pelo cliente e o cancelamento administrativo. Sem ele, a única
+> alternativa seria reaproveitar `FINISHED`/`DELIVERED` ou apagar a OS, ambos
+> indesejáveis: o primeiro distorce métricas (tempo médio, receita), o segundo elimina
+> rastreabilidade. `CANCELLED` mantém o histórico, segrega métricas e respeita a
+> invariante de que toda transição é auditável. A inclusão é **complementar**, não
+> conflitante com os 6 estados do enunciado.
 
 ```
                     ┌─────────────────────────────────────────────────────┐
@@ -285,11 +302,11 @@ Consultar Estoque  →  EstoqueBaixoDetectado      → Alerta para reposição
                            │ Repository Interfaces
 ┌──────────────────────────▼──────────────────────────────────────┐
 │                  INFRASTRUCTURE                                 │
-│  Persistence: ClientRepository | VehicleRepository              │
-│              PartRepository | ServiceItemRepository             │
-│              WorkOrderRepository (Panache)                      │
-│  Security:   AppUser | AppUserRepository | AuthService          │
-│  Validation: CpfCnpjValidator | LicensePlateValidator           │
+│  repository/: ClientRepository | VehicleRepository              │
+│               PartRepository  | ServiceItemRepository           │
+│               WorkOrderRepository (Panache)                     │
+│  security/:   AppUser | AppUserRepository | AuthService         │
+│  validation/: CpfCnpjValidator | LicensePlateValidator          │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -297,21 +314,25 @@ Consultar Estoque  →  EstoqueBaixoDetectado      → Alerta para reposição
 
 ## 8. Regras de Negócio (Domain Invariants)
 
-1. **Invariante de Estoque**: `part.stockQuantity >= 0` sempre. A operação `decreaseStock()` lança exceção se o estoque for insuficiente.
+1. **Invariante de Estoque**: `part.stockQuantity >= 0` sempre. A operação `decreaseStock()` lança exceção se o estoque
+   for insuficiente.
 
-2. **Invariante de Estado**: Transições inválidas de status lançam `InvalidStatusTransitionException`. Somente as transições permitidas pelo diagrama de estado são aceitas.
+2. **Invariante de Estado**: Transições inválidas de status lançam `InvalidStatusTransitionException`. Somente as
+   transições permitidas pelo diagrama de estado são aceitas.
 
 3. **CPF/CNPJ Único**: Não é possível cadastrar dois clientes com o mesmo CPF ou CNPJ.
 
 4. **Placa Única**: Não é possível cadastrar dois veículos com a mesma placa.
 
-5. **Associação Veículo-Cliente**: Um veículo só pode ser associado a uma OS se pertencer ao cliente identificado pelo CPF/CNPJ informado.
+5. **Associação Veículo-Cliente**: Um veículo só pode ser associado a uma OS se pertencer ao cliente identificado pelo
+   CPF/CNPJ informado.
 
 6. **Edição de OS**: Serviços e peças só podem ser adicionados/removidos em OS com status `RECEIVED` ou `IN_DIAGNOSIS`.
 
 7. **Orçamento Automático**: O `totalCost` da OS é recalculado automaticamente na transição para `AWAITING_APPROVAL`.
 
-8. **Preço Congelado**: O preço unitário de peças e serviços é registrado no momento da adição à OS (não muda se o catálogo for atualizado posteriormente).
+8. **Preço Congelado**: O preço unitário de peças e serviços é registrado no momento da adição à OS (não muda se o
+   catálogo for atualizado posteriormente).
 
 9. **Serviço Inativo**: Serviços marcados como `active = false` não podem ser adicionados a novas OS.
 
