@@ -31,15 +31,16 @@ public class PartService {
         return PartResponseDto.from(part);
     }
 
-    public List<PartResponseDto> findLowStock(int threshold) {
-        return partRepository.findLowStock(threshold).stream()
+    public List<PartResponseDto> findLowStock() {
+        return partRepository.findLowStock().stream()
             .map(PartResponseDto::from)
             .toList();
     }
 
     @Transactional
     public PartResponseDto create(PartRequestDto dto) {
-        Part part = new Part(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit());
+        Part part = new Part(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit(),
+            dto.minimumStock(), dto.partType());
         partRepository.persist(part);
         return PartResponseDto.from(part);
     }
@@ -48,7 +49,8 @@ public class PartService {
     public PartResponseDto update(Long id, PartRequestDto dto) {
         Part part = partRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
-        part.update(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit());
+        part.update(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit(),
+            dto.minimumStock(), dto.partType());
         return PartResponseDto.from(part);
     }
 

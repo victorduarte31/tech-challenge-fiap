@@ -8,7 +8,10 @@ import java.util.List;
 @ApplicationScoped
 public class PartRepository implements PanacheRepository<Part> {
 
-    public List<Part> findLowStock(int threshold) {
-        return list("stockQuantity <= ?1", threshold);
+    /**
+     * Peças cujo estoque atual está igual ou abaixo do mínimo definido para cada peça.
+     */
+    public List<Part> findLowStock() {
+        return list("stockQuantity <= minimumStock");
     }
 }

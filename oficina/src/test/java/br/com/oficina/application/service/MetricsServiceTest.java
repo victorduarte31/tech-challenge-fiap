@@ -51,7 +51,7 @@ class MetricsServiceTest {
         when(workOrderRepository.findWithExecutionTime()).thenReturn(
             List.of(buildWorkOrderWithExecTime(60), buildWorkOrderWithExecTime(120))
         );
-        when(partRepository.findLowStock(5)).thenReturn(List.of());
+        when(partRepository.findLowStock()).thenReturn(List.of());
 
         MetricsResponseDto result = metricsService.getMetrics();
 
@@ -71,7 +71,7 @@ class MetricsServiceTest {
         when(workOrderRepository.countCancelled()).thenReturn(0L);
         when(workOrderRepository.sumRevenueDelivered()).thenReturn(BigDecimal.ZERO);
         when(workOrderRepository.findWithExecutionTime()).thenReturn(List.of());
-        when(partRepository.findLowStock(5)).thenReturn(List.of());
+        when(partRepository.findLowStock()).thenReturn(List.of());
 
         MetricsResponseDto result = metricsService.getMetrics();
 
@@ -90,7 +90,7 @@ class MetricsServiceTest {
         when(workOrderRepository.findWithExecutionTime()).thenReturn(List.of());
         Part p1 = new Part("p1", null, BigDecimal.ONE, 1, "UN");
         Part p2 = new Part("p2", null, BigDecimal.ONE, 1, "UN");
-        when(partRepository.findLowStock(5)).thenReturn(List.of(p1, p2));
+        when(partRepository.findLowStock()).thenReturn(List.of(p1, p2));
 
         MetricsResponseDto result = metricsService.getMetrics();
 

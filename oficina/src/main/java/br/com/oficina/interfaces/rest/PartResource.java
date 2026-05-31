@@ -43,9 +43,9 @@ public class PartResource {
 
     @GET
     @Path("/low-stock")
-    @Operation(summary = "Listar itens com estoque baixo (≤ 5)")
+    @Operation(summary = "Listar itens com estoque igual ou abaixo do mínimo de cada peça")
     public List<PartResponseDto> findLowStock() {
-        return partService.findLowStock(5);
+        return partService.findLowStock();
     }
 
     @POST

@@ -248,6 +248,8 @@ public class WorkOrder {
     public WorkOrderStatus getStatus() { return status; }
     public String getNotes() { return notes; }
     public BigDecimal getTotalCost() { return totalCost; }
+    /** Orçamento da OS, gerado automaticamente a partir de peças e serviços incluídos. */
+    public BigDecimal getBudget() { return totalCost; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public LocalDateTime getDiagnosisStartedAt() { return diagnosisStartedAt; }

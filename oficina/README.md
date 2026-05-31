@@ -270,3 +270,66 @@ curl http://localhost:8080/q/health
 | Mockito             | —         | Mocking para testes unitários  |
 | REST-Assured        | —         | Testes de integração REST      |
 | JaCoCo              | 0.8.12    | Cobertura de código            |
+
+---
+
+## 🔄 Atualizações de Aderência ao Desafio (Fase 1)
+
+Esta seção documenta melhorias aplicadas após a revisão de aderência entre o desafio,
+o código e a documentação DDD (Miro).
+
+### Justificativa da escolha do banco de dados (PostgreSQL)
+
+Optou-se por **PostgreSQL** por ser um SGBD relacional open-source, maduro e amplamente
+adotado, adequado ao domínio da oficina (dados fortemente relacionais: Cliente → Veículo →
+Ordem de Serviço → Peças/Serviços, com integridade referencial e transações ACID). Recursos
+relevantes para o MVP: constraints e chaves estrangeiras nativas, tipos numéricos exatos
+(`DECIMAL`) para valores monetários (orçamento), índices para consultas de acompanhamento e
+estoque, e excelente integração com Quarkus/Hibernate ORM + Flyway. Em ambiente de testes
+usa-se **H2 em modo de compatibilidade PostgreSQL**, mantendo o mesmo dialeto sem custo de
+infraestrutura.
+
+### Controle de estoque por peça (estoque mínimo)
+
+- A entidade `Part` passou a ter **`minimumStock`** (estoque mínimo por peça) e o método de
+  domínio **`isLowStock()`** (estoque atual ≤ mínimo).
+- Distinção **peça × insumo** via enum **`PartType { PECA, INSUMO }`** (atende "peças e insumos"
+  da Linguagem Ubíqua).
+- Repositório: `PartRepository.findLowStock()` agora compara `stockQuantity <= minimumStock`
+  (antes era um limite global fixo).
+- `MetricsService` usa o mínimo por peça para o indicador de reposição.
+- Migration **`V2__add_stock_control_to_parts.sql`** adiciona as colunas `minimum_stock` e
+  `part_type` (+ índice de apoio).
+
+### Orçamento explícito no domínio
+
+- `WorkOrder.getBudget()` expõe o orçamento (gerado automaticamente a partir de peças e
+  serviços incluídos), reforçando o conceito de "Orçamento" da Linguagem Ubíqua.
+
+### Endpoints novos/ajustados (`/admin/parts`)
+
+| Método | Caminho | Descrição |
+|--------|---------|-----------|
+| GET | `/admin/parts/low-stock` | Lista peças/insumos com estoque ≤ mínimo (alerta de reposição) |
+| POST/PUT | `/admin/parts` (e `/{id}`) | Campos novos opcionais: `minimumStock`, `partType` (default `PECA`) |
+
+Os DTOs `PartRequestDto`/`PartResponseDto` incluem `minimumStock`, `partType` e `lowStock`.
+
+### Ajustes pendentes na documentação DDD (Miro)
+
+Os diagramas precisam refletir as mudanças acima (não aplicados automaticamente — ver nota de
+acesso ao board):
+
+1. **Classes do Domínio:** preencher atributos/métodos; incluir `minimumStock`/`partType` em
+   `Part`, `estimatedDurationMinutes` em `ServiceItem`, e o orçamento (`getBudget()`) em `WorkOrder`.
+2. **Event Storming (Fluxo OS):** padronizar a notação (comando→evento→policy) e incluir um
+   *read model* de **tempo médio de execução**.
+3. **Gestão de Peças/Insumos:** alinhar "alerta abaixo do limite" ao **mínimo por peça** e
+   distinguir peça/insumo.
+4. **Bounded Contexts:** incluir o contexto de **Acompanhamento Público (API do Cliente)**.
+5. **Arquitetura em Camadas:** citar **PostgreSQL** e **Swagger/OpenAPI** explicitamente.
+6. **Linguagem Ubíqua:** adicionar um **glossário** (mapeamento PT↔EN: Recebida=RECEIVED,
+   Orçamento=Budget/totalCost, Peça=Part, Insumo=Part(INSUMO), etc.).
+
+> Reparos adicionais pós-aprovação foram considerados **fora do escopo deste MVP** (a máquina de
+> estados atual permite edição apenas em `RECEIVED`/`IN_DIAGNOSIS`).

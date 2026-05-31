@@ -14,8 +14,6 @@ import java.util.List;
 @ApplicationScoped
 public class MetricsService {
 
-    private static final int LOW_STOCK_THRESHOLD = 5;
-
     WorkOrderRepository workOrderRepository;
     PartRepository partRepository;
 
@@ -39,7 +37,7 @@ public class MetricsService {
             .average()
             .orElse(0.0);
 
-        long lowStock = partRepository.findLowStock(LOW_STOCK_THRESHOLD).size();
+        long lowStock = partRepository.findLowStock().size();
 
         return new MetricsResponseDto(total, open, finished, cancelled, avgExecTime, totalRevenue, lowStock);
     }

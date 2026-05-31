@@ -5,6 +5,7 @@ import br.com.oficina.application.dto.PartResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
+import br.com.oficina.domain.model.PartType;
 import br.com.oficina.infrastructure.repository.PartRepository;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,10 +70,10 @@ class PartServiceTest {
     }
 
     @Test
-    void findLowStock_shouldReturnPartsUnderThreshold() {
-        when(partRepository.findLowStock(5)).thenReturn(List.of(samplePart));
+    void findLowStock_shouldReturnPartsAtOrBelowMinimum() {
+        when(partRepository.findLowStock()).thenReturn(List.of(samplePart));
 
-        List<PartResponseDto> result = partService.findLowStock(5);
+        List<PartResponseDto> result = partService.findLowStock();
 
         assertThat(result).hasSize(1);
     }
@@ -82,7 +83,7 @@ class PartServiceTest {
         doNothing().when(partRepository).persist(any(Part.class));
 
         PartRequestDto dto = new PartRequestDto(
-            "Filtro de Ar", "Filtro", new BigDecimal("29.90"), 10, "UN"
+            "Filtro de Ar", "Filtro", new BigDecimal("29.90"), 10, "UN", 5, PartType.PECA
         );
 
         PartResponseDto result = partService.create(dto);
@@ -97,7 +98,7 @@ class PartServiceTest {
         when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
 
         PartRequestDto dto = new PartRequestDto(
-            "Óleo Atualizado", "2 litros", new BigDecimal("89.90"), 15, "L"
+            "Óleo Atualizado", "2 litros", new BigDecimal("89.90"), 15, "L", 3, PartType.INSUMO
         );
 
         PartResponseDto result = partService.update(1L, dto);
