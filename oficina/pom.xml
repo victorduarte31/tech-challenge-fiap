@@ -279,6 +279,7 @@
                                         </limit>
                                     </limits>
                                     <includes>
+                                        <include>br.com.oficina.domain.model.*</include>
                                         <include>br.com.oficina.application.service.*</include>
                                         <include>br.com.oficina.infrastructure.security.*</include>
                                         <include>br.com.oficina.infrastructure.validation.*</include>

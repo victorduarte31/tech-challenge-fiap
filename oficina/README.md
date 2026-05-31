@@ -52,11 +52,13 @@ chmod +x generate-keys.sh
 ./generate-keys.sh
 
 # 2. Suba o PostgreSQL via Docker
+# Usuário/senha alinhados aos defaults da aplicação (DB_USERNAME/DB_PASSWORD=postgres),
+# permitindo rodar 'mvn quarkus:dev' sem definir variáveis de ambiente.
 docker run -d \
   --name oficina-postgres \
   -e POSTGRES_DB=oficina_db \
-  -e POSTGRES_USER=oficina \
-  -e POSTGRES_PASSWORD=oficina123 \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
   -p 5432:5432 \
   postgres:16-alpine
 
