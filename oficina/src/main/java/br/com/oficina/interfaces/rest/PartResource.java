@@ -5,6 +5,7 @@ import br.com.oficina.application.dto.PartResponseDto;
 import br.com.oficina.application.service.PartService;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -52,7 +53,7 @@ public class PartResource {
     @POST
     @RolesAllowed("ADMIN")
     @Operation(summary = "Cadastrar nova peça/insumo")
-    public Response create(@Valid PartRequestDto dto) {
+    public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") PartRequestDto dto) {
         PartResponseDto created = partService.create(dto);
         return Response.created(URI.create("/admin/parts/" + created.id())).entity(created).build();
     }
@@ -61,7 +62,7 @@ public class PartResource {
     @Path("/{id}")
     @RolesAllowed("ADMIN")
     @Operation(summary = "Atualizar peça/insumo")
-    public PartResponseDto update(@PathParam("id") Long id, @Valid PartRequestDto dto) {
+    public PartResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") PartRequestDto dto) {
         return partService.update(id, dto);
     }
 
@@ -73,7 +74,9 @@ public class PartResource {
         description = "Operação restrita a ADMIN. Mecânicos consomem estoque indiretamente ao adicionar peças à OS; " +
                       "ajustes manuais de entrada/saída (compra, devolução, perda) são responsabilidade administrativa."
     )
-    public PartResponseDto adjustStock(@PathParam("id") Long id, @QueryParam("adjustment") int adjustment) {
+    public PartResponseDto adjustStock(@PathParam("id") Long id,
+                                       @QueryParam("adjustment")
+                                       @NotNull(message = "Parâmetro 'adjustment' é obrigatório") Integer adjustment) {
         return partService.adjustStock(id, adjustment);
     }
 

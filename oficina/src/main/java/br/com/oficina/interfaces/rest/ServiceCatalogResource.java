@@ -5,6 +5,7 @@ import br.com.oficina.application.dto.ServiceItemResponseDto;
 import br.com.oficina.application.service.ServiceItemService;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -51,7 +52,7 @@ public class ServiceCatalogResource {
     @POST
     @RolesAllowed("ADMIN")
     @Operation(summary = "Cadastrar novo serviço")
-    public Response create(@Valid ServiceItemRequestDto dto) {
+    public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") ServiceItemRequestDto dto) {
         ServiceItemResponseDto created = serviceItemService.create(dto);
         return Response.created(URI.create("/admin/services/" + created.id())).entity(created).build();
     }
@@ -60,7 +61,7 @@ public class ServiceCatalogResource {
     @Path("/{id}")
     @RolesAllowed("ADMIN")
     @Operation(summary = "Atualizar serviço")
-    public ServiceItemResponseDto update(@PathParam("id") Long id, @Valid ServiceItemRequestDto dto) {
+    public ServiceItemResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") ServiceItemRequestDto dto) {
         return serviceItemService.update(id, dto);
     }
 

@@ -5,6 +5,7 @@ import br.com.oficina.application.dto.VehicleResponseDto;
 import br.com.oficina.application.service.VehicleService;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -52,7 +53,7 @@ public class VehicleResource {
     @POST
     @RolesAllowed("ADMIN")
     @Operation(summary = "Cadastrar novo veículo")
-    public Response create(@Valid VehicleRequestDto dto) {
+    public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") VehicleRequestDto dto) {
         VehicleResponseDto created = vehicleService.create(dto);
         return Response.created(URI.create("/admin/vehicles/" + created.id())).entity(created).build();
     }
@@ -61,7 +62,7 @@ public class VehicleResource {
     @Path("/{id}")
     @RolesAllowed("ADMIN")
     @Operation(summary = "Atualizar veículo")
-    public VehicleResponseDto update(@PathParam("id") Long id, @Valid VehicleRequestDto dto) {
+    public VehicleResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") VehicleRequestDto dto) {
         return vehicleService.update(id, dto);
     }
 

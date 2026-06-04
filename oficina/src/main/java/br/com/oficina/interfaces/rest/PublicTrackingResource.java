@@ -6,6 +6,7 @@ import br.com.oficina.application.dto.PublicWorkOrderStatusDto;
 import br.com.oficina.application.service.WorkOrderService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -44,7 +45,7 @@ public class PublicTrackingResource {
                       "Exige CPF/CNPJ no corpo como prova de identidade — deve coincidir com o cliente da OS."
     )
     public PublicWorkOrderDto approve(@PathParam("orderNumber") String orderNumber,
-                                      @Valid PublicApprovalRequestDto request) {
+                                      @Valid @NotNull(message = "Corpo da requisição é obrigatório") PublicApprovalRequestDto request) {
         return PublicWorkOrderDto.from(
             workOrderService.approveByOrderNumber(orderNumber, request.clientCpfCnpj())
         );
@@ -59,7 +60,7 @@ public class PublicTrackingResource {
                       "Exige CPF/CNPJ no corpo como prova de identidade — deve coincidir com o cliente da OS."
     )
     public PublicWorkOrderDto reject(@PathParam("orderNumber") String orderNumber,
-                                     @Valid PublicApprovalRequestDto request) {
+                                     @Valid @NotNull(message = "Corpo da requisição é obrigatório") PublicApprovalRequestDto request) {
         return PublicWorkOrderDto.from(
             workOrderService.rejectByOrderNumber(orderNumber, request.clientCpfCnpj())
         );

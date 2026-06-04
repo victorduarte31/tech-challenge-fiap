@@ -36,11 +36,14 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
             return errorResponse(Response.Status.CONFLICT,
                 "O registro foi alterado por outra operação. Recarregue os dados e tente novamente.");
         }
-        // Violação de integridade referencial (ex.: excluir registro ainda vinculado a outros)
-        // deve resultar em 409 Conflict, não em 500.
-        if (isIntegrityConstraintViolation(exception)) {
-            return errorResponse(Response.Status.CONFLICT,
-                "Registro vinculado a outros dados; operação não permitida.");
+        // Violação de integridade no banco -> 409 Conflict (não 500), com mensagem
+        // específica por tipo: 23505 = unicidade; demais 23xxx = chave estrangeira.
+        String sqlState = integrityViolationState(exception);
+        if (sqlState != null) {
+            String message = "23505".equals(sqlState)
+                ? "Registro já existente: violação de unicidade."
+                : "Registro vinculado a outros dados; operação não permitida.";
+            return errorResponse(Response.Status.CONFLICT, message);
         }
         // Não vaza detalhes internos para o cliente; usa correlation id para o operador
         String correlationId = UUID.randomUUID().toString();
@@ -61,15 +64,15 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
      * integridade. SQLState classe "23" = integrity constraint violation (padrão
      * SQL, válido para PostgreSQL e H2).
      */
-    private boolean isIntegrityConstraintViolation(Throwable exception) {
+    private String integrityViolationState(Throwable exception) {
         for (Throwable cause = exception; cause != null && cause != cause.getCause(); cause = cause.getCause()) {
             if (cause instanceof java.sql.SQLException sql
                 && sql.getSQLState() != null
                 && sql.getSQLState().startsWith("23")) {
-                return true;
+                return sql.getSQLState();
             }
         }
-        return false;
+        return null;
     }
 
     private boolean hasCause(Throwable exception, Class<? extends Throwable> type) {
