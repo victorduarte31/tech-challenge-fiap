@@ -13,7 +13,7 @@ RUN mvn dependency:go-offline -q
 
 # Copia o código-fonte e compila (sem testes)
 COPY src ./src
-RUN mvn package -DskipTests -q
+RUN mvn package -DskipTests -Dquarkus.profile=docker -q
 
 # ===================================================
 # Stage 2: Runtime
