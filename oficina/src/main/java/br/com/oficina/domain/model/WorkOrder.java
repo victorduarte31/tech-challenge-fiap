@@ -110,6 +110,9 @@ public class WorkOrder {
 
     public WorkOrderPart addPart(Part part, int quantity) {
         ensureEditable();
+        if (!part.isActive()) {
+            throw new BusinessException("Peça/Insumo inativo: " + part.getName());
+        }
         part.decreaseStock(quantity);
         WorkOrderPart line = new WorkOrderPart(this, part, quantity, part.getUnitPrice());
         this.parts.add(line);

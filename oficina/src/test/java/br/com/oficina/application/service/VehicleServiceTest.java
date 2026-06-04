@@ -48,9 +48,9 @@ class VehicleServiceTest {
 
     @Test
     void listAll_shouldReturnAll() {
-        when(vehicleRepository.listAll()).thenReturn(List.of(vehicle));
+        when(vehicleRepository.listAll(0, 20)).thenReturn(List.of(vehicle));
 
-        List<VehicleResponseDto> result = vehicleService.listAll();
+        List<VehicleResponseDto> result = vehicleService.listAll(0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().licensePlate()).isEqualTo("ABC1234");

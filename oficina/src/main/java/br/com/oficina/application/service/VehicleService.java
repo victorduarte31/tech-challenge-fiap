@@ -1,5 +1,6 @@
 package br.com.oficina.application.service;
 
+import br.com.oficina.application.Pagination;
 import br.com.oficina.application.dto.VehicleRequestDto;
 import br.com.oficina.application.dto.VehicleResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
@@ -25,8 +26,8 @@ public class VehicleService {
         this.clientRepository = clientRepository;
     }
 
-    public List<VehicleResponseDto> listAll() {
-        return vehicleRepository.listAll().stream()
+    public List<VehicleResponseDto> listAll(int page, int size) {
+        return vehicleRepository.listAll(Pagination.page(page), Pagination.cap(size)).stream()
             .map(VehicleResponseDto::from)
             .toList();
     }

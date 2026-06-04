@@ -115,4 +115,39 @@ class PartResourceTest {
             .then()
             .statusCode(401);
     }
+
+    @Test
+    @Order(9)
+    @TestSecurity(user = "mecanico", roles = {"MECHANIC"})
+    void reactivate_asMechanic_shouldReturn403() {
+        given()
+            .when().patch("/admin/parts/" + partId + "/reactivate")
+            .then()
+            .statusCode(403);
+    }
+
+    @Test
+    @Order(10)
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void softDeleteThenReactivate_cycle() {
+        // Soft-delete: desativa a peça
+        given()
+            .when().delete("/admin/parts/" + partId)
+            .then()
+            .statusCode(204);
+
+        // Ainda existe (admin consegue ver), porém inativa
+        given()
+            .when().get("/admin/parts/" + partId)
+            .then()
+            .statusCode(200)
+            .body("active", equalTo(false));
+
+        // Reativação reverte o soft-delete
+        given()
+            .when().patch("/admin/parts/" + partId + "/reactivate")
+            .then()
+            .statusCode(200)
+            .body("active", equalTo(true));
+    }
 }

@@ -126,8 +126,11 @@ pertencer ao cliente informado, senão `BusinessException`.
 *"autorizar reparos adicionais via aplicativo"*. Resolvemos com um **bounded context de
 Acompanhamento Público** (`PublicTrackingResource`, `@PermitAll`):
 
-- `GET /public/work-orders/{orderNumber}/status` — consulta status **sem expor dados pessoais**
-  (DTO anonimizado `PublicWorkOrderDto`).
+- `GET /public/work-orders/{orderNumber}/status` — consulta status com **payload mínimo**
+  (`PublicWorkOrderStatusDto`: número, status e marcos temporais). **Não expõe** dados pessoais,
+  placa, orçamento nem itens — como o endpoint é aberto e o número da OS é sequencial (enumerável),
+  expor esses campos permitiria vazamento por varredura. O payload rico (com orçamento/itens) só é
+  devolvido nos endpoints que exigem CPF/CNPJ.
 - `POST .../approve` e `.../reject` — cliente aprova/rejeita o orçamento remotamente.
 
 **Justificativa de segurança (decisão importante):** o canal público **exige CPF/CNPJ no corpo**
@@ -149,10 +152,13 @@ auditoria via JWT do operador.
 | Listagem/detalhamento de OS | `WorkOrderResource` |
 | **Tempo médio de execução** | `MetricsResource` + `MetricsService` |
 
-**Métrica de tempo médio:** calculada a partir dos timestamps
-`executionStartedAt`/`finishedAt` (`getExecutionDurationMinutes`), agregada em `MetricsService`.
-O endpoint também devolve total/abertas/finalizadas/canceladas, receita entregue e contagem de
-itens com estoque baixo.
+**Métrica de tempo médio:** calculada a partir dos timestamps `executionStartedAt`/`finishedAt`.
+Em vez de carregar as OS como entidades (com `Client`/`Vehicle` em EAGER) só para a média, o
+`MetricsService` usa uma **projeção escalar** dos dois timestamps (`findExecutionTimestamps`) e
+agrega em memória — a diferença de timestamps em SQL é dialeto-dependente (H2 × PostgreSQL),
+então a projeção elimina o gargalo (carregar o grafo) mantendo portabilidade. A contagem de itens
+com estoque baixo passou a ser feita **no banco** (`countLowStock`). O endpoint também devolve
+total/abertas/finalizadas/canceladas e receita entregue.
 
 ---
 
@@ -165,8 +171,13 @@ itens com estoque baixo.
 - `Part.minimumStock` + `Part.isLowStock()` — alerta de reposição por **estoque mínimo
   configurável por peça** (não um limite global fixo).
 - `GET /admin/parts/low-stock` — lista o que precisa repor.
-- Débito/crédito de estoque acoplado à máquina de estados da OS (Slide 4).
-- Migration **`V2__add_stock_control_to_parts.sql`** adiciona as colunas + índice.
+- Débito/crédito de estoque acoplado à máquina de estados da OS (Slide 4); `addPart` recusa peça inativa.
+- **Lock otimista** (`@Version` em `Part`): débitos concorrentes não causam mais *lost update*;
+  conflito retorna **409**, não 500.
+- **Soft-delete** (`Part.active`): excluir peça é exclusão lógica (preserva integridade com OS
+  históricas — FK deixa de virar 500). `PATCH /admin/parts/{id}/reactivate` reverte a desativação.
+- Migrations **`V2`** (controle de estoque) e **`V3`** (lock otimista + soft-delete) adicionam as
+  colunas + índice de reposição (apenas peças ativas).
 
 **Justificativa:** controle por mínimo individual reflete a realidade (cada item tem giro
 diferente) e ataca diretamente a dor *"Falhas no controle de peças e insumos"*.
@@ -211,7 +222,8 @@ fortemente relacional (Cliente → Veículo → OS → Peças/Serviços) com int
 transações ACID, `DECIMAL(10,2)` exato para valores monetários, e ótima integração
 Quarkus/Hibernate/Flyway.
 
-- **Flyway** versiona o schema (`V1` schema inicial, `V2` controle de estoque) — `migrate-at-start=true`.
+- **Flyway** versiona o schema (`V1` schema inicial, `V2` controle de estoque, `V3` lock otimista +
+  soft-delete de peças) — `migrate-at-start=true`.
 - Índices criados para os padrões de consulta reais (status da OS, CPF/CNPJ, placa, FKs).
 - **Testes** usam **H2 em modo PostgreSQL** — mesmo dialeto, sem custo de infra no pipeline.
 
@@ -222,6 +234,9 @@ Quarkus/Hibernate/Flyway.
 **Fala:** APIs JAX-RS documentadas via **SmallRye OpenAPI**:
 - Swagger UI: `/swagger-ui`; OpenAPI JSON: `/openapi`.
 - Anotações `@Operation`, `@Tag`, `@SecurityRequirement(bearerAuth)`.
+- **Listagens paginadas** (OS, clientes, peças, veículos) via `?page=&size=` (default `0`/`20`,
+  teto de `100` por página); o catálogo de serviços fica sem paginação por ser referência de baixa
+  cardinalidade (decisão consciente).
 
 **Justificativa de hardening (perfis):**
 - `%prod` → **Swagger/OpenAPI desabilitados** (não expor superfície em produção).
@@ -313,3 +328,23 @@ revisão manual com riscos residuais explícitos.
    permite edição em `RECEIVED`/`IN_DIAGNOSIS`) — limite consciente do MVP.
 4. **Evolução:** rate limiting no login, refresh tokens, trilha de auditoria (A09),
    observabilidade (Prometheus/Grafana), secret manager e HTTPS no perímetro.
+
+---
+
+## Slide 18 — Hardening pós-revisão (correções aplicadas após auditoria)
+
+Após uma varredura cruzando PDF × código, aplicamos 5 correções de robustez/segurança. Todas
+cobertas por testes (suíte verde, gate JaCoCo ≥80% mantido):
+
+| # | Problema identificado | Correção | Impacto |
+|---|---|---|---|
+| A | `GET /status` público expunha placa, orçamento e itens; número da OS é sequencial (enumerável) → vazamento por varredura | Novo `PublicWorkOrderStatusDto` com payload mínimo (status + marcos). Dados de valor só nos endpoints que exigem CPF/CNPJ | Fecha vazamento de dados sensíveis (OWASP A01/A04) |
+| B | Estoque sem controle de concorrência → *lost update* sob débitos simultâneos | `@Version` em `Part` (lock otimista); conflito → **409** | Consistência transacional do estoque |
+| C | `delete` de peça era físico → `500` por violação de FK; inconsistente com `ServiceItem` (soft-delete) | Soft-delete (`Part.active`) + endpoint de reativação; FK → **409** no mapper | Integridade com OS históricas; erro semântico correto |
+| D | Métrica de tempo médio carregava todas as OS (com EAGER) em memória; baixo estoque contado com `.size()` | Projeção escalar de timestamps + `countLowStock` no banco | Menos I/O; portável H2 × PostgreSQL |
+| E | Listagens sem paginação (OS, clientes, peças, veículos) | `?page=&size=` com teto de 100 | Escalabilidade das consultas |
+
+**Decisões conscientes:** (1) a média de execução permanece agregada em Java porque a subtração de
+timestamps em SQL é dialeto-dependente, e a paridade H2↔PostgreSQL dos testes é mais valiosa que a
+micro-otimização; (2) o catálogo de serviços ficou sem paginação por ser dado de referência de
+baixa cardinalidade — paginar tudo seria excesso.

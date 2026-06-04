@@ -43,9 +43,9 @@ class PartServiceTest {
 
     @Test
     void listAll_shouldReturnAllParts() {
-        when(partRepository.listAll()).thenReturn(List.of(samplePart));
+        when(partRepository.listActive(0, 20)).thenReturn(List.of(samplePart));
 
-        List<PartResponseDto> result = partService.listAll();
+        List<PartResponseDto> result = partService.listAll(0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().name()).isEqualTo("Óleo Motor 5W30");
@@ -135,12 +135,14 @@ class PartServiceTest {
     }
 
     @Test
-    void delete_whenExists_shouldDelete() {
+    void delete_whenExists_shouldSoftDelete() {
         when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
-        doNothing().when(partRepository).delete(samplePart);
 
         assertThatCode(() -> partService.delete(1L)).doesNotThrowAnyException();
-        verify(partRepository).delete(samplePart);
+
+        // Soft-delete: peça é desativada, não removida fisicamente (preserva integridade com OS históricas)
+        assertThat(samplePart.isActive()).isFalse();
+        verify(partRepository, never()).delete(any(Part.class));
     }
 
     @Test
@@ -148,6 +150,25 @@ class PartServiceTest {
         when(partRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> partService.delete(99L))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void reactivate_whenExists_shouldActivatePart() {
+        samplePart.deactivate();
+        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+
+        PartResponseDto result = partService.reactivate(1L);
+
+        assertThat(samplePart.isActive()).isTrue();
+        assertThat(result.active()).isTrue();
+    }
+
+    @Test
+    void reactivate_whenNotFound_shouldThrow() {
+        when(partRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> partService.reactivate(99L))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

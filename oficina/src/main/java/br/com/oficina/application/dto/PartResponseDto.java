@@ -15,13 +15,14 @@ public record PartResponseDto(
     Integer minimumStock,
     PartType partType,
     boolean lowStock,
+    boolean active,
     LocalDateTime createdAt
 ) {
     public static PartResponseDto from(Part p) {
         return new PartResponseDto(
             p.getId(), p.getName(), p.getDescription(), p.getUnitPrice(),
             p.getStockQuantity(), p.getUnit(), p.getMinimumStock(), p.getPartType(),
-            p.isLowStock(), p.getCreatedAt()
+            p.isLowStock(), p.isActive(), p.getCreatedAt()
         );
     }
 }

@@ -1,7 +1,6 @@
 package br.com.oficina.application.service;
 
 import br.com.oficina.application.dto.MetricsResponseDto;
-import br.com.oficina.domain.model.WorkOrder;
 import br.com.oficina.infrastructure.repository.PartRepository;
 import br.com.oficina.infrastructure.repository.WorkOrderRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -9,7 +8,8 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.time.Duration;
+import java.time.LocalDateTime;
 
 @ApplicationScoped
 public class MetricsService {
@@ -31,13 +31,12 @@ public class MetricsService {
 
         BigDecimal totalRevenue = workOrderRepository.sumRevenueDelivered();
 
-        List<WorkOrder> withExecTime = workOrderRepository.findWithExecutionTime();
-        double avgExecTime = withExecTime.stream()
-            .mapToLong(WorkOrder::getExecutionDurationMinutes)
+        double avgExecTime = workOrderRepository.findExecutionTimestamps().stream()
+            .mapToLong(row -> Duration.between((LocalDateTime) row[0], (LocalDateTime) row[1]).toMinutes())
             .average()
             .orElse(0.0);
 
-        long lowStock = partRepository.findLowStock().size();
+        long lowStock = partRepository.countLowStock();
 
         return new MetricsResponseDto(total, open, finished, cancelled, avgExecTime, totalRevenue, lowStock);
     }

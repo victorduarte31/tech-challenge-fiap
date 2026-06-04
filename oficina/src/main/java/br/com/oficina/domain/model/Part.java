@@ -35,6 +35,13 @@ public class Part {
     @Column(name = "part_type", nullable = false, length = 10)
     private PartType partType = PartType.PECA;
 
+    @Column(nullable = false)
+    private Boolean active = true;
+
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -89,6 +96,18 @@ public class Part {
         return minimumStock != null && stockQuantity <= minimumStock;
     }
 
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public boolean isActive() {
+        return Boolean.TRUE.equals(active);
+    }
+
     public void decreaseStock(int quantity) {
         if (this.stockQuantity < quantity) {
             throw new BusinessException(
@@ -110,6 +129,7 @@ public class Part {
     public String getUnit() { return unit; }
     public Integer getMinimumStock() { return minimumStock; }
     public PartType getPartType() { return partType; }
+    public Boolean getActive() { return active; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

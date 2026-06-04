@@ -42,9 +42,9 @@ class ClientServiceTest {
 
     @Test
     void listAll_shouldReturnMappedDtos() {
-        when(clientRepository.listAll()).thenReturn(List.of(sampleClient));
+        when(clientRepository.listAll(0, 20)).thenReturn(List.of(sampleClient));
 
-        List<ClientResponseDto> result = clientService.listAll();
+        List<ClientResponseDto> result = clientService.listAll(0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().name()).isEqualTo("João Silva");

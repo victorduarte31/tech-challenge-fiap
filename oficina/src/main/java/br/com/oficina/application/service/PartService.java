@@ -1,5 +1,6 @@
 package br.com.oficina.application.service;
 
+import br.com.oficina.application.Pagination;
 import br.com.oficina.application.dto.PartRequestDto;
 import br.com.oficina.application.dto.PartResponseDto;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
@@ -19,8 +20,8 @@ public class PartService {
         this.partRepository = partRepository;
     }
 
-    public List<PartResponseDto> listAll() {
-        return partRepository.listAll().stream()
+    public List<PartResponseDto> listAll(int page, int size) {
+        return partRepository.listActive(Pagination.page(page), Pagination.cap(size)).stream()
             .map(PartResponseDto::from)
             .toList();
     }
@@ -66,10 +67,26 @@ public class PartService {
         return PartResponseDto.from(part);
     }
 
+    /**
+     * Exclusão lógica (soft-delete): a peça pode estar referenciada por OS históricas,
+     * portanto não é removida fisicamente — apenas desativada, saindo do catálogo e dos alertas.
+     */
     @Transactional
     public void delete(Long id) {
         Part part = partRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
-        partRepository.delete(part);
+        part.deactivate();
+    }
+
+    /**
+     * Reverte o soft-delete: reativa uma peça previamente desativada, devolvendo-a
+     * ao catálogo e aos alertas de reposição.
+     */
+    @Transactional
+    public PartResponseDto reactivate(Long id) {
+        Part part = partRepository.findByIdOptional(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
+        part.activate();
+        return PartResponseDto.from(part);
     }
 }

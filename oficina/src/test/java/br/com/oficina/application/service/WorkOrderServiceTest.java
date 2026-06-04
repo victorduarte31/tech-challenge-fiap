@@ -62,9 +62,9 @@ class WorkOrderServiceTest {
 
     @Test
     void listAll_shouldReturnAllOrders() {
-        when(workOrderRepository.listAll()).thenReturn(List.of(workOrder));
+        when(workOrderRepository.listAll(0, 20)).thenReturn(List.of(workOrder));
 
-        List<WorkOrderResponseDto> result = workOrderService.listAll();
+        List<WorkOrderResponseDto> result = workOrderService.listAll(0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().orderNumber()).isEqualTo("OS-000001");
@@ -72,9 +72,9 @@ class WorkOrderServiceTest {
 
     @Test
     void listByStatus_shouldFilterByStatus() {
-        when(workOrderRepository.findByStatus(WorkOrderStatus.RECEIVED)).thenReturn(List.of(workOrder));
+        when(workOrderRepository.findByStatus(WorkOrderStatus.RECEIVED, 0, 20)).thenReturn(List.of(workOrder));
 
-        List<WorkOrderResponseDto> result = workOrderService.listByStatus(WorkOrderStatus.RECEIVED);
+        List<WorkOrderResponseDto> result = workOrderService.listByStatus(WorkOrderStatus.RECEIVED, 0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().status()).isEqualTo(WorkOrderStatus.RECEIVED);

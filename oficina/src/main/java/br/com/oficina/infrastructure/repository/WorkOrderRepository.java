@@ -3,6 +3,8 @@ package br.com.oficina.infrastructure.repository;
 import br.com.oficina.domain.model.WorkOrder;
 import br.com.oficina.domain.model.WorkOrderStatus;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
+import io.quarkus.panache.common.Page;
+import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
 import jakarta.inject.Inject;
@@ -20,8 +22,12 @@ public class WorkOrderRepository implements PanacheRepository<WorkOrder> {
         return find("orderNumber", orderNumber).firstResultOptional();
     }
 
-    public List<WorkOrder> findByStatus(WorkOrderStatus status) {
-        return list("status", status);
+    public List<WorkOrder> listAll(int page, int size) {
+        return findAll(Sort.by("id")).page(Page.of(page, size)).list();
+    }
+
+    public List<WorkOrder> findByStatus(WorkOrderStatus status, int page, int size) {
+        return find("status", Sort.by("id"), status).page(Page.of(page, size)).list();
     }
 
     public long countOpen() {
@@ -46,8 +52,15 @@ public class WorkOrderRepository implements PanacheRepository<WorkOrder> {
         return new BigDecimal(result.toString());
     }
 
-    /** Retorna apenas as OS que têm tempo de execução registrado (para cálculo in-memory). */
-    public List<WorkOrder> findWithExecutionTime() {
-        return list("executionStartedAt IS NOT NULL AND finishedAt IS NOT NULL");
+    /**
+     * Projeção escalar (executionStartedAt, finishedAt) das OS com tempo de execução
+     * registrado. Evita materializar o agregado WorkOrder e suas associações EAGER
+     * (Client/Vehicle) apenas para o cálculo da média de tempo de execução.
+     */
+    public List<Object[]> findExecutionTimestamps() {
+        return em.createQuery(
+            "SELECT w.executionStartedAt, w.finishedAt FROM WorkOrder w " +
+            "WHERE w.executionStartedAt IS NOT NULL AND w.finishedAt IS NOT NULL", Object[].class)
+            .getResultList();
     }
 }

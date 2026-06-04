@@ -1,5 +1,6 @@
 package br.com.oficina.application.service;
 
+import br.com.oficina.application.Pagination;
 import br.com.oficina.application.dto.ClientRequestDto;
 import br.com.oficina.application.dto.ClientResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
@@ -20,8 +21,8 @@ public class ClientService {
         this.clientRepository = clientRepository;
     }
 
-    public List<ClientResponseDto> listAll() {
-        return clientRepository.listAll().stream()
+    public List<ClientResponseDto> listAll(int page, int size) {
+        return clientRepository.listAll(Pagination.page(page), Pagination.cap(size)).stream()
             .map(ClientResponseDto::from)
             .toList();
     }

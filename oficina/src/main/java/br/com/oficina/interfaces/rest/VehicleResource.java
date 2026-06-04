@@ -29,9 +29,10 @@ public class VehicleResource {
     }
 
     @GET
-    @Operation(summary = "Listar todos os veículos")
-    public List<VehicleResponseDto> listAll() {
-        return vehicleService.listAll();
+    @Operation(summary = "Listar veículos (paginado)")
+    public List<VehicleResponseDto> listAll(@QueryParam("page") @DefaultValue("0") int page,
+                                            @QueryParam("size") @DefaultValue("20") int size) {
+        return vehicleService.listAll(page, size);
     }
 
     @GET

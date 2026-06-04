@@ -29,9 +29,10 @@ public class PartResource {
     }
 
     @GET
-    @Operation(summary = "Listar todas as peças/insumos")
-    public List<PartResponseDto> listAll() {
-        return partService.listAll();
+    @Operation(summary = "Listar peças/insumos ativos (paginado)")
+    public List<PartResponseDto> listAll(@QueryParam("page") @DefaultValue("0") int page,
+                                         @QueryParam("size") @DefaultValue("20") int size) {
+        return partService.listAll(page, size);
     }
 
     @GET
@@ -79,9 +80,24 @@ public class PartResource {
     @DELETE
     @Path("/{id}")
     @RolesAllowed("ADMIN")
-    @Operation(summary = "Excluir peça/insumo")
+    @Operation(
+        summary = "Excluir peça/insumo (exclusão lógica) — somente ADMIN",
+        description = "Soft-delete: a peça é desativada (não removida fisicamente), pois pode estar " +
+                      "referenciada por OS históricas. Deixa de aparecer no catálogo e nos alertas de reposição."
+    )
     public Response delete(@PathParam("id") Long id) {
         partService.delete(id);
         return Response.noContent().build();
+    }
+
+    @PATCH
+    @Path("/{id}/reactivate")
+    @RolesAllowed("ADMIN")
+    @Operation(
+        summary = "Reativar peça/insumo — somente ADMIN",
+        description = "Reverte o soft-delete, devolvendo a peça ao catálogo e aos alertas de reposição."
+    )
+    public PartResponseDto reactivate(@PathParam("id") Long id) {
+        return partService.reactivate(id);
     }
 }

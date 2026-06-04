@@ -31,6 +31,17 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
     }
 
     private Response handleUnexpected(Throwable exception) {
+        // Conflito de concorrência (lock otimista @Version): outra transação alterou o registro.
+        if (hasCause(exception, jakarta.persistence.OptimisticLockException.class)) {
+            return errorResponse(Response.Status.CONFLICT,
+                "O registro foi alterado por outra operação. Recarregue os dados e tente novamente.");
+        }
+        // Violação de integridade referencial (ex.: excluir registro ainda vinculado a outros)
+        // deve resultar em 409 Conflict, não em 500.
+        if (isIntegrityConstraintViolation(exception)) {
+            return errorResponse(Response.Status.CONFLICT,
+                "Registro vinculado a outros dados; operação não permitida.");
+        }
         // Não vaza detalhes internos para o cliente; usa correlation id para o operador
         String correlationId = UUID.randomUUID().toString();
         LOG.errorf(exception, "Erro inesperado [%s]: %s", correlationId, exception.getMessage());
@@ -43,6 +54,31 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
                 "timestamp", OffsetDateTime.now().toString()
             ))
             .build();
+    }
+
+    /**
+     * Percorre a cadeia de causas em busca de uma SQLException de violação de
+     * integridade. SQLState classe "23" = integrity constraint violation (padrão
+     * SQL, válido para PostgreSQL e H2).
+     */
+    private boolean isIntegrityConstraintViolation(Throwable exception) {
+        for (Throwable cause = exception; cause != null && cause != cause.getCause(); cause = cause.getCause()) {
+            if (cause instanceof java.sql.SQLException sql
+                && sql.getSQLState() != null
+                && sql.getSQLState().startsWith("23")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasCause(Throwable exception, Class<? extends Throwable> type) {
+        for (Throwable cause = exception; cause != null && cause != cause.getCause(); cause = cause.getCause()) {
+            if (type.isInstance(cause)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Response errorResponse(Response.Status status, String message) {

@@ -1,5 +1,6 @@
 package br.com.oficina.application.service;
 
+import br.com.oficina.application.Pagination;
 import br.com.oficina.application.dto.*;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
@@ -33,15 +34,15 @@ public class WorkOrderService {
     }
 
     @Transactional(TxType.SUPPORTS)
-    public List<WorkOrderResponseDto> listAll() {
-        return workOrderRepository.listAll().stream()
+    public List<WorkOrderResponseDto> listAll(int page, int size) {
+        return workOrderRepository.listAll(Pagination.page(page), Pagination.cap(size)).stream()
             .map(WorkOrderResponseDto::from)
             .toList();
     }
 
     @Transactional(TxType.SUPPORTS)
-    public List<WorkOrderResponseDto> listByStatus(WorkOrderStatus status) {
-        return workOrderRepository.findByStatus(status).stream()
+    public List<WorkOrderResponseDto> listByStatus(WorkOrderStatus status, int page, int size) {
+        return workOrderRepository.findByStatus(status, Pagination.page(page), Pagination.cap(size)).stream()
             .map(WorkOrderResponseDto::from)
             .toList();
     }

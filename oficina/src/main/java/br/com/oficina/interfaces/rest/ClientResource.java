@@ -29,9 +29,10 @@ public class ClientResource {
     }
 
     @GET
-    @Operation(summary = "Listar todos os clientes")
-    public List<ClientResponseDto> listAll() {
-        return clientService.listAll();
+    @Operation(summary = "Listar clientes (paginado)")
+    public List<ClientResponseDto> listAll(@QueryParam("page") @DefaultValue("0") int page,
+                                           @QueryParam("size") @DefaultValue("20") int size) {
+        return clientService.listAll(page, size);
     }
 
     @GET

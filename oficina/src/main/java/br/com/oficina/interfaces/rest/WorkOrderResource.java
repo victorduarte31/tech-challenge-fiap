@@ -28,12 +28,14 @@ public class WorkOrderResource {
     }
 
     @GET
-    @Operation(summary = "Listar todas as OS")
-    public List<WorkOrderResponseDto> listAll(@QueryParam("status") WorkOrderStatus status) {
+    @Operation(summary = "Listar OS (paginado; filtro opcional por status)")
+    public List<WorkOrderResponseDto> listAll(@QueryParam("status") WorkOrderStatus status,
+                                              @QueryParam("page") @DefaultValue("0") int page,
+                                              @QueryParam("size") @DefaultValue("20") int size) {
         if (status != null) {
-            return workOrderService.listByStatus(status);
+            return workOrderService.listByStatus(status, page, size);
         }
-        return workOrderService.listAll();
+        return workOrderService.listAll(page, size);
     }
 
     @GET

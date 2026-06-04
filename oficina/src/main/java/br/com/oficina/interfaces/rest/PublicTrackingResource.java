@@ -2,6 +2,7 @@ package br.com.oficina.interfaces.rest;
 
 import br.com.oficina.application.dto.PublicApprovalRequestDto;
 import br.com.oficina.application.dto.PublicWorkOrderDto;
+import br.com.oficina.application.dto.PublicWorkOrderStatusDto;
 import br.com.oficina.application.service.WorkOrderService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
@@ -27,10 +28,11 @@ public class PublicTrackingResource {
     @Operation(
         summary = "Consultar status da OS",
         description = "Permite ao cliente consultar o status de sua Ordem de Serviço pelo número. " +
-                      "Não expõe dados pessoais do cliente."
+                      "Retorna apenas número, status e marcos temporais — não expõe dados pessoais, " +
+                      "placa, orçamento ou itens (evita vazamento por enumeração do número da OS)."
     )
-    public PublicWorkOrderDto getStatus(@PathParam("orderNumber") String orderNumber) {
-        return PublicWorkOrderDto.from(workOrderService.findByOrderNumber(orderNumber));
+    public PublicWorkOrderStatusDto getStatus(@PathParam("orderNumber") String orderNumber) {
+        return PublicWorkOrderStatusDto.from(workOrderService.findByOrderNumber(orderNumber));
     }
 
     @POST
