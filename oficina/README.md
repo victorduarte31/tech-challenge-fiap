@@ -44,6 +44,28 @@ A aplicação estará disponível em `http://localhost:8080`
 
 > **Nota:** Na primeira execução, o container gera automaticamente o par de chaves RSA para JWT. O volume `oficina_jwt_keys` persiste as chaves entre reinicializações.
 
+#### Solução de Problemas (Docker)
+
+Se `http://localhost:8080` não responder após o `docker-compose up`, **primeiro verifique o estado e os logs do app** — o postgres pode estar saudável enquanto o app reinicia em loop:
+
+```bash
+# Estado dos containers (procure por "Restarting" no oficina_app)
+docker compose ps
+
+# Logs do app (mostra a causa real do crash)
+docker logs oficina_app --tail 50
+```
+
+| Sintoma no log | Causa | Solução |
+|----------------|-------|---------|
+| `exec /app/docker-entrypoint.sh: no such file or directory` | Script com fim de linha **CRLF** (comum no Windows com `git config core.autocrlf=true`): a shebang vira `#!/bin/sh\r`. | Já mitigado no `Dockerfile` (normaliza para LF no build) e no `.gitattributes`. Se persistir, reconstrua sem cache: `docker compose build --no-cache app && docker compose up -d`. |
+| `password authentication failed` / `FATAL: role "..." does not exist` | Volume `oficina_postgres_data` foi criado antes com **credenciais diferentes** (o Postgres só aplica `POSTGRES_USER/PASSWORD` no primeiro init, com volume vazio). | Recrie do zero: `docker compose down -v && docker compose up --build -d`. **Atenção:** `-v` apaga os dados do banco. |
+| App em `Restarting` logo após subir | Crash na inicialização (banco, chaves JWT, etc.). | Leia `docker logs oficina_app` para a causa específica. |
+
+> No **primeiro** `docker-compose up --build`, a imagem é construída via Maven dentro do container
+> (download de dependências + compilação), o que pode levar alguns minutos. Aguarde o log
+> `Listening on: http://0.0.0.0:8080` antes de acessar.
+
 ### Opção 2 — Desenvolvimento Local
 
 ```bash

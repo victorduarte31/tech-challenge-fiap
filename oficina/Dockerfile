@@ -42,7 +42,13 @@ COPY --from=build /app/target/quarkus-app/quarkus/ /app/quarkus/
 RUN apk add --no-cache openssl wget
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh \
+# Normaliza fins de linha para LF: se o script for checkout/commitado com CRLF
+# (comum em Windows com core.autocrlf=true), a shebang vira "#!/bin/sh\r" e o
+# container falha com "no such file or directory". tr remove os CR de forma
+# portável (busybox).
+RUN tr -d '\r' < /app/docker-entrypoint.sh > /app/docker-entrypoint.sh.unix \
+    && mv /app/docker-entrypoint.sh.unix /app/docker-entrypoint.sh \
+    && chmod +x /app/docker-entrypoint.sh \
     && mkdir -p /app/keys \
     && chown -R oficina:oficina /app
 
