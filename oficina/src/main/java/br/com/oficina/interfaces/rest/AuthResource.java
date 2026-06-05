@@ -4,6 +4,7 @@ import br.com.oficina.application.dto.LoginRequestDto;
 import br.com.oficina.application.dto.LoginResponseDto;
 import br.com.oficina.infrastructure.security.AuthService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -25,7 +26,7 @@ public class AuthResource {
     @POST
     @Path("/login")
     @Operation(summary = "Realizar login", description = "Autentica o usuário e retorna um token JWT")
-    public Response login(@Valid LoginRequestDto request) {
+    public Response login(@Valid @NotNull(message = "Corpo da requisição é obrigatório") LoginRequestDto request) {
         LoginResponseDto response = authService.login(request);
         return Response.ok(response).build();
     }

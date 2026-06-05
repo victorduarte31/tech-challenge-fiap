@@ -135,6 +135,13 @@ class PartServiceTest {
     }
 
     @Test
+    void adjustStock_withZero_shouldThrowException() {
+        assertThatThrownBy(() -> partService.adjustStock(1L, 0))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("não pode ser zero");
+    }
+
+    @Test
     void delete_whenExists_shouldSoftDelete() {
         when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
 

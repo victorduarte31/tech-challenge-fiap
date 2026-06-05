@@ -127,6 +127,45 @@ class PartResourceTest {
     }
 
     @Test
+    @Order(11)
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void adjustStock_withoutAdjustment_shouldReturn400() {
+        given()
+            .when().patch("/admin/parts/" + partId + "/stock")
+            .then()
+            .statusCode(400);
+    }
+
+    @Test
+    @Order(12)
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void adjustStock_withZero_shouldReturn422() {
+        given()
+            .when().patch("/admin/parts/" + partId + "/stock?adjustment=0")
+            .then()
+            .statusCode(422);
+    }
+
+    @Test
+    @Order(13)
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void create_withUnitPriceTooLarge_shouldReturn400() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "Peça Cara",
+                    "unitPrice": 999999999999.99,
+                    "stockQuantity": 1,
+                    "unit": "UN"
+                }
+                """)
+            .when().post("/admin/parts")
+            .then()
+            .statusCode(400);
+    }
+
+    @Test
     @Order(10)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
     void softDeleteThenReactivate_cycle() {

@@ -1,0 +1,13 @@
+# Normalização de fins de linha do repositório.
+# Por padrão, o Git decide automaticamente (texto x binário).
+* text=auto
+
+# Scripts shell e arquivos consumidos por containers Linux DEVEM usar LF.
+# Em CRLF, a shebang vira "#!/bin/sh\r" e o container falha com
+# "no such file or directory". Vale mesmo com core.autocrlf=true no Windows.
+*.sh            text eol=lf
+docker-entrypoint.sh text eol=lf
+generate-keys.sh     text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf

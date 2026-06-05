@@ -5,6 +5,7 @@ import br.com.oficina.application.dto.ClientResponseDto;
 import br.com.oficina.application.service.ClientService;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -52,7 +53,7 @@ public class ClientResource {
     @POST
     @RolesAllowed("ADMIN")
     @Operation(summary = "Cadastrar novo cliente")
-    public Response create(@Valid ClientRequestDto dto) {
+    public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") ClientRequestDto dto) {
         ClientResponseDto created = clientService.create(dto);
         return Response.created(URI.create("/admin/clients/" + created.id())).entity(created).build();
     }
@@ -61,7 +62,7 @@ public class ClientResource {
     @Path("/{id}")
     @RolesAllowed("ADMIN")
     @Operation(summary = "Atualizar cliente")
-    public ClientResponseDto update(@PathParam("id") Long id, @Valid ClientRequestDto dto) {
+    public ClientResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") ClientRequestDto dto) {
         return clientService.update(id, dto);
     }
 

@@ -43,7 +43,6 @@ docker-compose down
 A aplicação estará disponível em `http://localhost:8080`
 
 > **Nota:** Na primeira execução, o container gera automaticamente o par de chaves RSA para JWT. O volume `oficina_jwt_keys` persiste as chaves entre reinicializações.
-
 ### Opção 2 — Desenvolvimento Local
 
 ```bash

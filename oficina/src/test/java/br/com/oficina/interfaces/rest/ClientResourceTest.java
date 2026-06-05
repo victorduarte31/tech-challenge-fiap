@@ -96,6 +96,28 @@ class ClientResourceTest {
 
     @Test
     @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void create_withNameTooLong_shouldReturn400() {
+        String longName = "A".repeat(200); // coluna name é VARCHAR(150)
+        given()
+            .contentType(ContentType.JSON)
+            .body(String.format("{\"name\":\"%s\",\"cpfCnpj\":\"111.444.777-35\",\"clientType\":\"PF\"}", longName))
+            .when().post("/admin/clients")
+            .then()
+            .statusCode(400);
+    }
+
+    @Test
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void create_withEmptyBody_shouldReturn400() {
+        given()
+            .contentType(ContentType.JSON)
+            .when().post("/admin/clients")
+            .then()
+            .statusCode(400);
+    }
+
+    @Test
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
     void createAndRetrieve_fullCycle() {
         Integer id = given()
             .contentType(ContentType.JSON)

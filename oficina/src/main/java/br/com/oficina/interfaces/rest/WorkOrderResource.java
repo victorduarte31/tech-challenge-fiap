@@ -5,6 +5,7 @@ import br.com.oficina.application.service.WorkOrderService;
 import br.com.oficina.domain.model.WorkOrderStatus;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -55,7 +56,7 @@ public class WorkOrderResource {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Criar nova OS")
-    public Response create(@Valid WorkOrderCreateDto dto) {
+    public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") WorkOrderCreateDto dto) {
         WorkOrderResponseDto created = workOrderService.create(dto);
         return Response.created(URI.create("/admin/work-orders/" + created.id())).entity(created).build();
     }
@@ -64,7 +65,7 @@ public class WorkOrderResource {
     @Path("/{id}/services")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Adicionar serviço à OS")
-    public WorkOrderResponseDto addService(@PathParam("id") Long id, @Valid WorkOrderServiceDto dto) {
+    public WorkOrderResponseDto addService(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") WorkOrderServiceDto dto) {
         return workOrderService.addService(id, dto);
     }
 
@@ -80,7 +81,7 @@ public class WorkOrderResource {
     @Path("/{id}/parts")
     @Consumes(MediaType.APPLICATION_JSON)
     @Operation(summary = "Adicionar peça à OS")
-    public WorkOrderResponseDto addPart(@PathParam("id") Long id, @Valid WorkOrderPartDto dto) {
+    public WorkOrderResponseDto addPart(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") WorkOrderPartDto dto) {
         return workOrderService.addPart(id, dto);
     }
 

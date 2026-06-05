@@ -3,6 +3,7 @@ package br.com.oficina.application.service;
 import br.com.oficina.application.Pagination;
 import br.com.oficina.application.dto.PartRequestDto;
 import br.com.oficina.application.dto.PartResponseDto;
+import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
 import br.com.oficina.infrastructure.repository.PartRepository;
@@ -57,6 +58,9 @@ public class PartService {
 
     @Transactional
     public PartResponseDto adjustStock(Long id, int adjustment) {
+        if (adjustment == 0) {
+            throw new BusinessException("O ajuste de estoque não pode ser zero");
+        }
         Part part = partRepository.findByIdOptional(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
         if (adjustment > 0) {
