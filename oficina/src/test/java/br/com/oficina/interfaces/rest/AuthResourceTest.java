@@ -61,15 +61,15 @@ class AuthResourceTest {
     }
 
     @Test
-    void login_withMechanicCredentials_shouldReturn200() {
+    void login_withAttendantCredentials_shouldReturn200() {
         given()
             .contentType(ContentType.JSON)
             .body("""
-                {"username": "mecanico", "password": "mecanico123"}
+                {"username": "atendente", "password": "atendente123"}
                 """)
             .when().post("/auth/login")
             .then()
             .statusCode(200)
-            .body("role", equalTo("MECHANIC"));
+            .body("role", equalTo("ATTENDANT"));
     }
 }

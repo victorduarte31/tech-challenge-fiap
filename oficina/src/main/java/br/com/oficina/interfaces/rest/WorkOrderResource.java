@@ -17,7 +17,7 @@ import java.util.List;
 
 @Path("/admin/work-orders")
 @Produces(MediaType.APPLICATION_JSON)
-@RolesAllowed({"ADMIN", "MECHANIC"})
+@RolesAllowed({"ADMIN", "ATTENDANT"})
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Ordens de Serviço", description = "Gestão completa de Ordens de Serviço")
 public class WorkOrderResource {
@@ -148,7 +148,11 @@ public class WorkOrderResource {
     @PATCH
     @Path("/{id}/cancel")
     @RolesAllowed("ADMIN")
-    @Operation(summary = "Cancelar OS (somente ADMIN)")
+    @Operation(
+        summary = "Cancelar OS — somente dono (ADMIN)",
+        description = "Execução direta restrita ao dono. A atendente abre uma solicitação " +
+                      "em POST /admin/requests/cancellation, que o dono aprova."
+    )
     public WorkOrderResponseDto cancel(@PathParam("id") Long id) {
         return workOrderService.cancel(id);
     }

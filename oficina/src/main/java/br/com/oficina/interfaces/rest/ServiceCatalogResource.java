@@ -18,7 +18,7 @@ import java.util.List;
 @Path("/admin/services")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@RolesAllowed({"ADMIN", "MECHANIC"})
+@RolesAllowed({"ADMIN", "ATTENDANT"})
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Catálogo de Serviços", description = "Gestão do catálogo de serviços da oficina")
 public class ServiceCatalogResource {
@@ -50,7 +50,7 @@ public class ServiceCatalogResource {
     }
 
     @POST
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Cadastrar novo serviço")
     public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") ServiceItemRequestDto dto) {
         ServiceItemResponseDto created = serviceItemService.create(dto);
@@ -59,7 +59,7 @@ public class ServiceCatalogResource {
 
     @PUT
     @Path("/{id}")
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Atualizar serviço")
     public ServiceItemResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") ServiceItemRequestDto dto) {
         return serviceItemService.update(id, dto);

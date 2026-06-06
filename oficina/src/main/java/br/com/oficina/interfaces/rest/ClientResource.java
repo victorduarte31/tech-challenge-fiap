@@ -18,7 +18,7 @@ import java.util.List;
 @Path("/admin/clients")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@RolesAllowed({"ADMIN", "MECHANIC"})
+@RolesAllowed({"ADMIN", "ATTENDANT"})
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Clientes", description = "Gestão de clientes")
 public class ClientResource {
@@ -51,7 +51,7 @@ public class ClientResource {
     }
 
     @POST
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Cadastrar novo cliente")
     public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") ClientRequestDto dto) {
         ClientResponseDto created = clientService.create(dto);
@@ -60,7 +60,7 @@ public class ClientResource {
 
     @PUT
     @Path("/{id}")
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Atualizar cliente")
     public ClientResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") ClientRequestDto dto) {
         return clientService.update(id, dto);

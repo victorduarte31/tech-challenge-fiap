@@ -18,7 +18,7 @@ import java.util.List;
 @Path("/admin/vehicles")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@RolesAllowed({"ADMIN", "MECHANIC"})
+@RolesAllowed({"ADMIN", "ATTENDANT"})
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Veículos", description = "Gestão de veículos")
 public class VehicleResource {
@@ -51,7 +51,7 @@ public class VehicleResource {
     }
 
     @POST
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Cadastrar novo veículo")
     public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") VehicleRequestDto dto) {
         VehicleResponseDto created = vehicleService.create(dto);
@@ -60,7 +60,7 @@ public class VehicleResource {
 
     @PUT
     @Path("/{id}")
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Atualizar veículo")
     public VehicleResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") VehicleRequestDto dto) {
         return vehicleService.update(id, dto);

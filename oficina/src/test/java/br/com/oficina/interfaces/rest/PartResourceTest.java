@@ -39,8 +39,8 @@ class PartResourceTest {
 
     @Test
     @Order(2)
-    @TestSecurity(user = "mecanico", roles = {"MECHANIC"})
-    void create_asMechanic_shouldReturn403() {
+    @TestSecurity(user = "atendente", roles = {"ATTENDANT"})
+    void create_asAttendant_shouldReturn201() {
         given()
             .contentType(ContentType.JSON)
             .body("""
@@ -50,13 +50,13 @@ class PartResourceTest {
                 """)
             .when().post("/admin/parts")
             .then()
-            .statusCode(403);
+            .statusCode(201);
     }
 
     @Test
     @Order(3)
-    @TestSecurity(user = "mecanico", roles = {"MECHANIC"})
-    void listAll_asMechanic_shouldReturn200() {
+    @TestSecurity(user = "atendente", roles = {"ATTENDANT"})
+    void listAll_asAttendant_shouldReturn200() {
         given()
             .when().get("/admin/parts")
             .then()
@@ -99,8 +99,9 @@ class PartResourceTest {
 
     @Test
     @Order(7)
-    @TestSecurity(user = "mecanico", roles = {"MECHANIC"})
-    void adjustStock_asMechanic_shouldReturn403() {
+    @TestSecurity(user = "atendente", roles = {"ATTENDANT"})
+    void adjustStock_directly_asAttendant_shouldReturn403() {
+        // Atendente não ajusta estoque diretamente; deve abrir solicitação.
         given()
             .when().patch("/admin/parts/" + partId + "/stock?adjustment=5")
             .then()
@@ -118,8 +119,8 @@ class PartResourceTest {
 
     @Test
     @Order(9)
-    @TestSecurity(user = "mecanico", roles = {"MECHANIC"})
-    void reactivate_asMechanic_shouldReturn403() {
+    @TestSecurity(user = "atendente", roles = {"ATTENDANT"})
+    void reactivate_asAttendant_shouldReturn403() {
         given()
             .when().patch("/admin/parts/" + partId + "/reactivate")
             .then()

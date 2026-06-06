@@ -27,8 +27,8 @@ class MetricsResourceTest {
     }
 
     @Test
-    @TestSecurity(user = "mecanico", roles = {"MECHANIC"})
-    void getMetrics_asMechanic_shouldReturn403() {
+    @TestSecurity(user = "atendente", roles = {"ATTENDANT"})
+    void getMetrics_asAttendant_shouldReturn403() {
         given()
             .when().get("/admin/metrics")
             .then()

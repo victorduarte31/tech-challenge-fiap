@@ -92,6 +92,10 @@ public class WorkOrderService {
                 addPartToOrder(wo, p);
             }
         }
+        // Força o flush para que as linhas (peças/serviços) persistidas por cascata
+        // recebam seus ids antes da montagem do DTO. Sem isto, a resposta traria linhas
+        // com id nulo e o cliente não conseguiria removê-las (DELETE .../parts/null -> 404).
+        workOrderRepository.flush();
         return WorkOrderResponseDto.from(wo);
     }
 
@@ -99,6 +103,7 @@ public class WorkOrderService {
     public WorkOrderResponseDto addService(Long id, WorkOrderServiceDto dto) {
         WorkOrder wo = findWorkOrder(id);
         addServiceToOrder(wo, dto);
+        workOrderRepository.flush();
         return WorkOrderResponseDto.from(wo);
     }
 
@@ -106,6 +111,7 @@ public class WorkOrderService {
     public WorkOrderResponseDto addPart(Long id, WorkOrderPartDto dto) {
         WorkOrder wo = findWorkOrder(id);
         addPartToOrder(wo, dto);
+        workOrderRepository.flush();
         return WorkOrderResponseDto.from(wo);
     }
 

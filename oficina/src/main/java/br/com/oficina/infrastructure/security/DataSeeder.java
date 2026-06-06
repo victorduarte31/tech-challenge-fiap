@@ -30,11 +30,11 @@ public class DataSeeder {
     @ConfigProperty(name = "app.seed.admin-password")
     Optional<String> adminPassword;
 
-    @ConfigProperty(name = "app.seed.mechanic-username", defaultValue = "mecanico")
-    String mechanicUsername;
+    @ConfigProperty(name = "app.seed.attendant-username", defaultValue = "atendente")
+    String attendantUsername;
 
-    @ConfigProperty(name = "app.seed.mechanic-password")
-    Optional<String> mechanicPassword;
+    @ConfigProperty(name = "app.seed.attendant-password")
+    Optional<String> attendantPassword;
 
     @ConfigProperty(name = "app.seed.enabled", defaultValue = "true")
     boolean seedEnabled;
@@ -46,7 +46,7 @@ public class DataSeeder {
             return;
         }
         seedUser(adminUsername, adminPassword, "ADMIN");
-        seedUser(mechanicUsername, mechanicPassword, "MECHANIC");
+        seedUser(attendantUsername, attendantPassword, "ATTENDANT");
     }
 
     private void seedUser(String username, Optional<String> configuredPassword, String role) {

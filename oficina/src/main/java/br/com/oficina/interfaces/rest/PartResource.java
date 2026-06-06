@@ -18,7 +18,7 @@ import java.util.List;
 @Path("/admin/parts")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@RolesAllowed({"ADMIN", "MECHANIC"})
+@RolesAllowed({"ADMIN", "ATTENDANT"})
 @SecurityRequirement(name = "bearerAuth")
 @Tag(name = "Peças e Insumos", description = "Gestão de peças e insumos com controle de estoque")
 public class PartResource {
@@ -51,7 +51,7 @@ public class PartResource {
     }
 
     @POST
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Cadastrar nova peça/insumo")
     public Response create(@Valid @NotNull(message = "Corpo da requisição é obrigatório") PartRequestDto dto) {
         PartResponseDto created = partService.create(dto);
@@ -60,7 +60,7 @@ public class PartResource {
 
     @PUT
     @Path("/{id}")
-    @RolesAllowed("ADMIN")
+    @RolesAllowed({"ADMIN", "ATTENDANT"})
     @Operation(summary = "Atualizar peça/insumo")
     public PartResponseDto update(@PathParam("id") Long id, @Valid @NotNull(message = "Corpo da requisição é obrigatório") PartRequestDto dto) {
         return partService.update(id, dto);
@@ -70,9 +70,10 @@ public class PartResource {
     @Path("/{id}/stock")
     @RolesAllowed("ADMIN")
     @Operation(
-        summary = "Ajustar estoque (positivo=entrada, negativo=saída) — somente ADMIN",
-        description = "Operação restrita a ADMIN. Mecânicos consomem estoque indiretamente ao adicionar peças à OS; " +
-                      "ajustes manuais de entrada/saída (compra, devolução, perda) são responsabilidade administrativa."
+        summary = "Ajustar estoque (positivo=entrada, negativo=saída) — somente dono (ADMIN)",
+        description = "Execução direta do ajuste, restrita ao dono. A atendente não ajusta " +
+                      "diretamente: abre uma solicitação em POST /admin/requests/stock-adjustment, " +
+                      "que o dono aprova."
     )
     public PartResponseDto adjustStock(@PathParam("id") Long id,
                                        @QueryParam("adjustment")
