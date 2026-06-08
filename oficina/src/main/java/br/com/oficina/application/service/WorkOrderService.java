@@ -49,9 +49,7 @@ public class WorkOrderService {
 
     @Transactional(TxType.SUPPORTS)
     public WorkOrderResponseDto findById(Long id) {
-        WorkOrder wo = workOrderRepository.findByIdOptional(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Ordem de Serviço", id));
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(findWorkOrder(id));
     }
 
     @Transactional(TxType.SUPPORTS)
@@ -78,8 +76,8 @@ public class WorkOrderService {
             throw new BusinessException("O veículo não pertence ao cliente informado");
         }
 
-        WorkOrder wo = new WorkOrder(client, vehicle, dto.notes());
-        workOrderRepository.persist(wo);
+        WorkOrder wo = new WorkOrder(snapshotOf(client), snapshotOf(vehicle), dto.notes());
+        wo = workOrderRepository.save(wo);
         wo.assignOrderNumber("OS-" + String.format("%06d", wo.getId()));
 
         if (dto.services() != null) {
@@ -92,98 +90,102 @@ public class WorkOrderService {
                 addPartToOrder(wo, p);
             }
         }
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto addService(Long id, WorkOrderServiceDto dto) {
         WorkOrder wo = findWorkOrder(id);
         addServiceToOrder(wo, dto);
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto addPart(Long id, WorkOrderPartDto dto) {
         WorkOrder wo = findWorkOrder(id);
         addPartToOrder(wo, dto);
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto removeService(Long id, Long serviceLineId) {
         WorkOrder wo = findWorkOrder(id);
         wo.removeService(serviceLineId);
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto removePart(Long id, Long partLineId) {
         WorkOrder wo = findWorkOrder(id);
-        wo.removePart(partLineId);
-        return WorkOrderResponseDto.from(wo);
+        WorkOrderPart removed = wo.removePart(partLineId);
+        restoreStock(removed);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto startDiagnosis(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.startDiagnosis();
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto sendForApproval(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.sendForApproval();
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto approve(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.approve();
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto reject(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.reject();
-        return WorkOrderResponseDto.from(wo);
+        restoreStockOfAllParts(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto complete(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.complete();
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto deliver(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.deliver();
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto cancel(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.cancel();
-        return WorkOrderResponseDto.from(wo);
+        restoreStockOfAllParts(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto approveByOrderNumber(String orderNumber, String clientCpfCnpj) {
         WorkOrder wo = findAndAuthorize(orderNumber, clientCpfCnpj);
         wo.approve();
-        return WorkOrderResponseDto.from(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Transactional
     public WorkOrderResponseDto rejectByOrderNumber(String orderNumber, String clientCpfCnpj) {
         WorkOrder wo = findAndAuthorize(orderNumber, clientCpfCnpj);
         wo.reject();
-        return WorkOrderResponseDto.from(wo);
+        restoreStockOfAllParts(wo);
+        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     private WorkOrder findAndAuthorize(String orderNumber, String providedCpfCnpj) {
@@ -192,7 +194,7 @@ public class WorkOrderService {
                 "Ordem de Serviço não encontrada: " + orderNumber));
 
         String normalized = CpfCnpjUtils.normalize(providedCpfCnpj);
-        if (!wo.getClient().getCpfCnpj().equals(normalized)) {
+        if (!wo.getCustomer().cpfCnpj().equals(normalized)) {
             // Mensagem genérica para não distinguir "OS inexistente" de "CPF/CNPJ não confere"
             throw new ResourceNotFoundException("Ordem de Serviço não encontrada: " + orderNumber);
         }
@@ -200,19 +202,46 @@ public class WorkOrderService {
     }
 
     private WorkOrder findWorkOrder(Long id) {
-        return workOrderRepository.findByIdOptional(id)
+        return workOrderRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Ordem de Serviço", id));
     }
 
     private void addServiceToOrder(WorkOrder wo, WorkOrderServiceDto dto) {
         ServiceItem serviceItem = serviceItemRepository.findByIdOptional(dto.serviceItemId())
             .orElseThrow(() -> new ResourceNotFoundException("Serviço", dto.serviceItemId()));
-        wo.addService(serviceItem, dto.notes());
+        if (!serviceItem.isActive()) {
+            throw new BusinessException("Serviço inativo: " + serviceItem.getName());
+        }
+        wo.addService(serviceItem.getId(), serviceItem.getName(), serviceItem.getBasePrice(), dto.notes());
     }
 
     private void addPartToOrder(WorkOrder wo, WorkOrderPartDto dto) {
         Part part = partRepository.findByIdOptional(dto.partId())
             .orElseThrow(() -> new ResourceNotFoundException("Peça/Insumo", dto.partId()));
-        wo.addPart(part, dto.quantity());
+        if (!part.isActive()) {
+            throw new BusinessException("Peça/Insumo inativo: " + part.getName());
+        }
+        wo.addPart(part.getId(), part.getName(), dto.quantity(), part.getUnitPrice());
+        part.decreaseStock(dto.quantity());
+    }
+
+    /** Devolve ao estoque a quantidade de uma linha removida (coordenação cross-aggregate). */
+    private void restoreStock(WorkOrderPart line) {
+        partRepository.findByIdOptional(line.getPartId())
+            .ifPresent(part -> part.increaseStock(line.getQuantity()));
+    }
+
+    private void restoreStockOfAllParts(WorkOrder wo) {
+        wo.getParts().forEach(this::restoreStock);
+    }
+
+    private static CustomerSnapshot snapshotOf(Client client) {
+        return new CustomerSnapshot(client.getId(), client.getName(), client.getCpfCnpj());
+    }
+
+    private static VehicleSnapshot snapshotOf(Vehicle vehicle) {
+        return new VehicleSnapshot(
+            vehicle.getId(), vehicle.getLicensePlate(), vehicle.getBrand(),
+            vehicle.getModel(), vehicle.getProductionYear());
     }
 }

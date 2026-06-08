@@ -1,46 +1,40 @@
 package br.com.oficina.domain.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 
-@Entity
-@Table(name = "work_order_services")
-public class WorkOrderServiceItem {
+/**
+ * Linha de serviço da OS. Imutável após criada. Referencia o aggregate
+ * {@code ServiceItem} por identidade ({@code serviceItemId}) e congela
+ * {@code price} no momento da inclusão; {@code serviceName} é snapshot de exibição.
+ */
+public final class WorkOrderServiceItem {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private final Long id;
+    private final Long serviceItemId;
+    private final String serviceName;
+    private final BigDecimal price;
+    private final String notes;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "work_order_id", nullable = false)
-    private WorkOrder workOrder;
-
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "service_item_id", nullable = false)
-    private ServiceItem serviceItem;
-
-    @Column(nullable = false, precision = 10, scale = 2)
-    private BigDecimal price;
-
-    @Column
-    private String notes;
-
-    protected WorkOrderServiceItem() {
-        // Required by JPA
+    public WorkOrderServiceItem(Long serviceItemId, String serviceName, BigDecimal price, String notes) {
+        this(null, serviceItemId, serviceName, price, notes);
     }
 
-    public WorkOrderServiceItem(WorkOrder workOrder, ServiceItem serviceItem, BigDecimal price, String notes) {
-        this.workOrder = workOrder;
-        this.serviceItem = serviceItem;
+    private WorkOrderServiceItem(Long id, Long serviceItemId, String serviceName, BigDecimal price, String notes) {
+        this.id = id;
+        this.serviceItemId = serviceItemId;
+        this.serviceName = serviceName;
         this.price = price;
         this.notes = notes;
     }
 
+    /** Reconstrói uma linha já persistida (uso exclusivo do mapper de persistência). */
+    public static WorkOrderServiceItem rehydrate(Long id, Long serviceItemId, String serviceName, BigDecimal price, String notes) {
+        return new WorkOrderServiceItem(id, serviceItemId, serviceName, price, notes);
+    }
+
     public Long getId() { return id; }
-    public WorkOrder getWorkOrder() { return workOrder; }
-    public ServiceItem getServiceItem() { return serviceItem; }
+    public Long getServiceItemId() { return serviceItemId; }
+    public String getServiceName() { return serviceName; }
     public BigDecimal getPrice() { return price; }
     public String getNotes() { return notes; }
 }

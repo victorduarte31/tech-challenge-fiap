@@ -1,41 +1,35 @@
 package br.com.oficina.domain.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 
-@Entity
-@Table(name = "work_order_parts")
-public class WorkOrderPart {
+/**
+ * Linha de peça da OS. Imutável após criada. Referencia o aggregate
+ * {@code Part} por identidade ({@code partId}) e congela {@code unitPrice} no
+ * momento da inclusão; {@code partName} é snapshot de exibição.
+ */
+public final class WorkOrderPart {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private final Long id;
+    private final Long partId;
+    private final String partName;
+    private final Integer quantity;
+    private final BigDecimal unitPrice;
 
-    @JsonIgnore
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "work_order_id", nullable = false)
-    private WorkOrder workOrder;
-
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "part_id", nullable = false)
-    private Part part;
-
-    @Column(nullable = false)
-    private Integer quantity;
-
-    @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
-    private BigDecimal unitPrice;
-
-    protected WorkOrderPart() {
-        // Required by JPA
+    public WorkOrderPart(Long partId, String partName, Integer quantity, BigDecimal unitPrice) {
+        this(null, partId, partName, quantity, unitPrice);
     }
 
-    public WorkOrderPart(WorkOrder workOrder, Part part, Integer quantity, BigDecimal unitPrice) {
-        this.workOrder = workOrder;
-        this.part = part;
+    private WorkOrderPart(Long id, Long partId, String partName, Integer quantity, BigDecimal unitPrice) {
+        this.id = id;
+        this.partId = partId;
+        this.partName = partName;
         this.quantity = quantity;
         this.unitPrice = unitPrice;
+    }
+
+    /** Reconstrói uma linha já persistida (uso exclusivo do mapper de persistência). */
+    public static WorkOrderPart rehydrate(Long id, Long partId, String partName, Integer quantity, BigDecimal unitPrice) {
+        return new WorkOrderPart(id, partId, partName, quantity, unitPrice);
     }
 
     public BigDecimal getSubtotal() {
@@ -43,8 +37,8 @@ public class WorkOrderPart {
     }
 
     public Long getId() { return id; }
-    public WorkOrder getWorkOrder() { return workOrder; }
-    public Part getPart() { return part; }
+    public Long getPartId() { return partId; }
+    public String getPartName() { return partName; }
     public Integer getQuantity() { return quantity; }
     public BigDecimal getUnitPrice() { return unitPrice; }
 }

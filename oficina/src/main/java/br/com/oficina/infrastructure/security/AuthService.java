@@ -5,7 +5,6 @@ import br.com.oficina.application.dto.LoginResponseDto;
 import io.quarkus.elytron.security.common.BcryptUtil;
 import io.smallrye.jwt.build.Jwt;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
 import jakarta.ws.rs.NotAuthorizedException;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -57,14 +56,5 @@ public class AuthService {
             .sign();
 
         return new LoginResponseDto(token, user.getUsername(), user.getRole(), expirationHours * 3600);
-    }
-
-    @Transactional
-    public void createUser(String username, String rawPassword, String role) {
-        if (userRepository.findByUsername(username).isPresent()) {
-            throw new IllegalArgumentException("Usuário já existe: " + username);
-        }
-        AppUser user = new AppUser(username, BcryptUtil.bcryptHash(rawPassword), role);
-        userRepository.persist(user);
     }
 }

@@ -3,94 +3,79 @@ package br.com.oficina.domain.model;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-@Entity
-@Table(name = "work_orders")
+/**
+ * Aggregate raiz da Ordem de Serviço — modelo de domínio puro, sem dependência
+ * de framework de persistência. Referencia os demais aggregates
+ * ({@code Client}, {@code Vehicle}, {@code Part}, {@code ServiceItem}) por
+ * identidade, via snapshots. A reserva/devolução de estoque é coordenada pela
+ * camada de aplicação (cross-aggregate), não pelo aggregate.
+ */
 public class WorkOrder {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(name = "order_number", unique = true, length = 20)
     private String orderNumber;
-
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "client_id", nullable = false)
-    private Client client;
-
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "vehicle_id", nullable = false)
-    private Vehicle vehicle;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 25)
-    private WorkOrderStatus status = WorkOrderStatus.RECEIVED;
-
-    @Column(length = 500)
+    private CustomerSnapshot customer;
+    private VehicleSnapshot vehicle;
+    private WorkOrderStatus status;
     private String notes;
-
-    @Column(name = "total_cost", precision = 10, scale = 2)
-    private BigDecimal totalCost = BigDecimal.ZERO;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
+    private BigDecimal totalCost;
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
-
-    @Column(name = "diagnosis_started_at")
     private LocalDateTime diagnosisStartedAt;
-
-    @Column(name = "sent_for_approval_at")
     private LocalDateTime sentForApprovalAt;
-
-    @Column(name = "approved_at")
     private LocalDateTime approvedAt;
-
-    @Column(name = "execution_started_at")
     private LocalDateTime executionStartedAt;
-
-    @Column(name = "finished_at")
     private LocalDateTime finishedAt;
-
-    @Column(name = "delivered_at")
     private LocalDateTime deliveredAt;
-
-    @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
-
-    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private final List<WorkOrderPart> parts = new ArrayList<>();
-
-    @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private final List<WorkOrderServiceItem> services = new ArrayList<>();
 
-    protected WorkOrder() {
-        // Required by JPA
-    }
-
-    public WorkOrder(Client client, Vehicle vehicle, String notes) {
-        this.client = client;
+    public WorkOrder(CustomerSnapshot customer, VehicleSnapshot vehicle, String notes) {
+        this.customer = customer;
         this.vehicle = vehicle;
         this.notes = notes;
+        this.status = WorkOrderStatus.RECEIVED;
+        this.totalCost = BigDecimal.ZERO;
+        this.createdAt = LocalDateTime.now();
     }
 
-    @PrePersist
-    void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    private WorkOrder() {
+        // Reconstrução via rehydrate().
     }
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = LocalDateTime.now();
+    /** Reconstrói o aggregate a partir da persistência (uso exclusivo do mapper). */
+    public static WorkOrder rehydrate(
+            Long id, String orderNumber, CustomerSnapshot customer, VehicleSnapshot vehicle,
+            WorkOrderStatus status, String notes, BigDecimal totalCost, LocalDateTime createdAt,
+            LocalDateTime diagnosisStartedAt, LocalDateTime sentForApprovalAt, LocalDateTime approvedAt,
+            LocalDateTime executionStartedAt, LocalDateTime finishedAt, LocalDateTime deliveredAt,
+            LocalDateTime cancelledAt, List<WorkOrderPart> parts, List<WorkOrderServiceItem> services) {
+        WorkOrder wo = new WorkOrder();
+        wo.id = id;
+        wo.orderNumber = orderNumber;
+        wo.customer = customer;
+        wo.vehicle = vehicle;
+        wo.status = status;
+        wo.notes = notes;
+        wo.totalCost = totalCost;
+        wo.createdAt = createdAt;
+        wo.diagnosisStartedAt = diagnosisStartedAt;
+        wo.sentForApprovalAt = sentForApprovalAt;
+        wo.approvedAt = approvedAt;
+        wo.executionStartedAt = executionStartedAt;
+        wo.finishedAt = finishedAt;
+        wo.deliveredAt = deliveredAt;
+        wo.cancelledAt = cancelledAt;
+        if (parts != null) wo.parts.addAll(parts);
+        if (services != null) wo.services.addAll(services);
+        return wo;
     }
 
     // ===== Identidade =====
@@ -106,37 +91,34 @@ public class WorkOrder {
         this.notes = notes;
     }
 
-    // ===== Manipulação de itens (delega regras ao agregado) =====
+    // ===== Manipulação de itens =====
+    // O domínio valida estado e recalcula o orçamento. A validação de
+    // peça/serviço ativo e o controle de estoque ocorrem na camada de aplicação,
+    // que coordena os aggregates Part/ServiceItem.
 
-    public WorkOrderPart addPart(Part part, int quantity) {
+    public WorkOrderPart addPart(Long partId, String partName, int quantity, BigDecimal unitPrice) {
         ensureEditable();
-        if (!part.isActive()) {
-            throw new BusinessException("Peça/Insumo inativo: " + part.getName());
-        }
-        part.decreaseStock(quantity);
-        WorkOrderPart line = new WorkOrderPart(this, part, quantity, part.getUnitPrice());
+        WorkOrderPart line = new WorkOrderPart(partId, partName, quantity, unitPrice);
         this.parts.add(line);
         recalculateTotalCost();
         return line;
     }
 
-    public void removePart(Long partLineId) {
+    /** Remove a linha e a devolve, para que a aplicação restaure o estoque correspondente. */
+    public WorkOrderPart removePart(Long partLineId) {
         ensureEditable();
         WorkOrderPart line = this.parts.stream()
-            .filter(p -> p.getId().equals(partLineId))
+            .filter(p -> p.getId() != null && p.getId().equals(partLineId))
             .findFirst()
             .orElseThrow(() -> new ResourceNotFoundException("Linha de peça", partLineId));
-        line.getPart().increaseStock(line.getQuantity());
         this.parts.remove(line);
         recalculateTotalCost();
+        return line;
     }
 
-    public WorkOrderServiceItem addService(ServiceItem serviceItem, String serviceNotes) {
+    public WorkOrderServiceItem addService(Long serviceItemId, String serviceName, BigDecimal price, String serviceNotes) {
         ensureEditable();
-        if (!serviceItem.isActive()) {
-            throw new BusinessException("Serviço inativo: " + serviceItem.getName());
-        }
-        WorkOrderServiceItem line = new WorkOrderServiceItem(this, serviceItem, serviceItem.getBasePrice(), serviceNotes);
+        WorkOrderServiceItem line = new WorkOrderServiceItem(serviceItemId, serviceName, price, serviceNotes);
         this.services.add(line);
         recalculateTotalCost();
         return line;
@@ -144,7 +126,7 @@ public class WorkOrder {
 
     public void removeService(Long serviceLineId) {
         ensureEditable();
-        boolean removed = this.services.removeIf(s -> s.getId().equals(serviceLineId));
+        boolean removed = this.services.removeIf(s -> s.getId() != null && s.getId().equals(serviceLineId));
         if (!removed) {
             throw new ResourceNotFoundException("Linha de serviço", serviceLineId);
         }
@@ -181,7 +163,6 @@ public class WorkOrder {
 
     public void reject() {
         requireStatus(WorkOrderStatus.AWAITING_APPROVAL);
-        restoreStockOfAllParts();
         status = WorkOrderStatus.CANCELLED;
         cancelledAt = LocalDateTime.now();
     }
@@ -204,15 +185,8 @@ public class WorkOrder {
                 "Não é possível cancelar uma OS com status: " + status
             );
         }
-        restoreStockOfAllParts();
         status = WorkOrderStatus.CANCELLED;
         cancelledAt = LocalDateTime.now();
-    }
-
-    private void restoreStockOfAllParts() {
-        for (WorkOrderPart line : parts) {
-            line.getPart().increaseStock(line.getQuantity());
-        }
     }
 
     public void recalculateTotalCost() {
@@ -239,22 +213,21 @@ public class WorkOrder {
         if (executionStartedAt == null || finishedAt == null) {
             return 0;
         }
-        return java.time.Duration.between(executionStartedAt, finishedAt).toMinutes();
+        return Duration.between(executionStartedAt, finishedAt).toMinutes();
     }
 
     // ===== Getters =====
 
     public Long getId() { return id; }
     public String getOrderNumber() { return orderNumber; }
-    public Client getClient() { return client; }
-    public Vehicle getVehicle() { return vehicle; }
+    public CustomerSnapshot getCustomer() { return customer; }
+    public VehicleSnapshot getVehicle() { return vehicle; }
     public WorkOrderStatus getStatus() { return status; }
     public String getNotes() { return notes; }
     public BigDecimal getTotalCost() { return totalCost; }
     /** Orçamento da OS, gerado automaticamente a partir de peças e serviços incluídos. */
     public BigDecimal getBudget() { return totalCost; }
     public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
     public LocalDateTime getDiagnosisStartedAt() { return diagnosisStartedAt; }
     public LocalDateTime getSentForApprovalAt() { return sentForApprovalAt; }
     public LocalDateTime getApprovedAt() { return approvedAt; }

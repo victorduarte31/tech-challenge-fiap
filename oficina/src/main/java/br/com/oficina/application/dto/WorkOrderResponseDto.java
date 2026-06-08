@@ -40,21 +40,21 @@ public record WorkOrderResponseDto(
     public static WorkOrderResponseDto from(WorkOrder wo) {
         List<WorkOrderPartSummaryDto> partDtos = wo.getParts().stream()
             .map(p -> new WorkOrderPartSummaryDto(
-                p.getId(), p.getPart().getName(), p.getQuantity(), p.getUnitPrice(), p.getSubtotal()
+                p.getId(), p.getPartName(), p.getQuantity(), p.getUnitPrice(), p.getSubtotal()
             ))
             .toList();
 
         List<WorkOrderServiceSummaryDto> serviceDtos = wo.getServices().stream()
             .map(s -> new WorkOrderServiceSummaryDto(
-                s.getId(), s.getServiceItem().getName(), s.getPrice(), s.getNotes()
+                s.getId(), s.getServiceName(), s.getPrice(), s.getNotes()
             ))
             .toList();
 
         return new WorkOrderResponseDto(
             wo.getId(), wo.getOrderNumber(), wo.getStatus(),
-            wo.getClient().getName(), wo.getClient().getCpfCnpj(),
-            wo.getVehicle().getLicensePlate(), wo.getVehicle().getBrand(), wo.getVehicle().getModel(),
-            wo.getVehicle().getProductionYear(),
+            wo.getCustomer().name(), wo.getCustomer().cpfCnpj(),
+            wo.getVehicle().licensePlate(), wo.getVehicle().brand(), wo.getVehicle().model(),
+            wo.getVehicle().productionYear(),
             wo.getNotes(), wo.getTotalCost(),
             wo.getCreatedAt(), wo.getDiagnosisStartedAt(), wo.getSentForApprovalAt(),
             wo.getApprovedAt(), wo.getExecutionStartedAt(), wo.getFinishedAt(),
