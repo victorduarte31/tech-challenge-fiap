@@ -22,7 +22,30 @@ A linguagem ubíqua estabelece um vocabulário compartilhado entre especialistas
 | **Entrega**               | Devolução do veículo ao cliente após conclusão dos serviços.                                                                                 |
 | **Status da OS**          | Estado atual da ordem de serviço no seu ciclo de vida.                                                                                       |
 | **Tempo de Execução**     | Duração entre o início da execução e a conclusão dos serviços.                                                                               |
-| **Snapshot**              | Cópia imutável dos dados de outro aggregate (cliente/veículo) ou do preço de peça/serviço, congelada no momento da inclusão na OS.           |
+| **Snapshot**              | Projeção em memória dos dados de outro aggregate (cliente/veículo) ou da linha de item, usada para manter a OS isolada do JPA. Apenas o **preço** (unitário da peça / do serviço) é persistido e congelado na linha; nome, CPF/CNPJ e placa são lidos por *join* na leitura e refletem o cadastro atual. |
+
+### Glossário PT ↔ EN (código)
+
+| Português               | Código (inglês)                 |
+|-------------------------|---------------------------------|
+| Ordem de Serviço (OS)   | `WorkOrder`                     |
+| Recebida                | `RECEIVED`                      |
+| Em diagnóstico          | `IN_DIAGNOSIS`                  |
+| Aguardando aprovação    | `AWAITING_APPROVAL`             |
+| Em execução             | `IN_EXECUTION`                  |
+| Finalizada              | `FINISHED`                      |
+| Entregue                | `DELIVERED`                     |
+| Cancelada               | `CANCELLED`                     |
+| Cliente                 | `Client`                        |
+| Veículo                 | `Vehicle`                       |
+| Peça                    | `Part` (`PartType.PECA`)        |
+| Insumo                  | `Part` (`PartType.INSUMO`)      |
+| Serviço (catálogo)      | `ServiceItem`                   |
+| Linha de peça da OS     | `WorkOrderPart`                 |
+| Linha de serviço da OS  | `WorkOrderServiceItem`          |
+| Orçamento               | `getBudget()` / `totalCost`     |
+| Estoque                 | `stockQuantity`                 |
+| Estoque mínimo          | `minimumStock` / `isLowStock()` |
 
 ---
 
@@ -49,29 +72,37 @@ flowchart TB
         AU["AppUser · JWT · RBAC"]
     end
 
+    CLI["👤 Cliente (App/Web)"]
+
     WO -->|"ref. por id (CustomerSnapshot)"| CL
     WO -->|"ref. por id (VehicleSnapshot)"| VE
     WO -->|"ref. por id (preço congelado)"| PA
     WO -->|"ref. por id (preço congelado)"| SI
+    CLI -->|"Acompanhamento Público:<br/>status · approve · reject<br/>(valida CPF/CNPJ)"| OS
     SEC -.protege.-> OS
     SEC -.protege.-> CV
     SEC -.protege.-> CAT
 
     style OS fill:#E3F2FD,stroke:#1565C0
+    style CLI fill:#FFF3E0,stroke:#EF6C00
 ```
 
 - **Core Domain — Ordens de Serviço:** ciclo de vida completo da OS, orçamento e aprovação.
 - **Supporting — Clientes e Veículos:** CRUD de clientes (CPF/CNPJ) e veículos.
 - **Supporting — Catálogo e Estoque:** catálogo de serviços e controle de estoque de peças.
 - **Generic — Segurança:** autenticação JWT e controle de acesso por papel.
+- **Acompanhamento Público (canal, não um bounded context):** interface REST aberta (`PublicTrackingResource`) para o cliente consultar e aprovar/rejeitar a própria OS, expondo uma visão restrita do Core Domain (valida CPF/CNPJ).
 
 ---
 
 ## 3. Modelo de Domínio — Aggregates, Entities e Value Objects
 
 O aggregate `WorkOrder` é um **POJO puro** (sem JPA). Ele não segura as entidades
-`Client`/`Vehicle`/`Part`/`ServiceItem`: referencia cada uma **por id** e mantém
-apenas snapshots para exibição e o **preço congelado** nas linhas.
+`Client`/`Vehicle`/`Part`/`ServiceItem`: referencia cada uma **por id** e expõe
+snapshots para exibição. Apenas o **preço** (unitário da peça / do serviço) é
+persistido e congelado na linha; os nomes/CPF/placa dos snapshots são
+reconstruídos por *join* na leitura — refletem o cadastro atual, preservando o
+comportamento anterior à refatoração.
 
 ```mermaid
 classDiagram
@@ -89,7 +120,7 @@ classDiagram
         +deliver()
         +cancel()
         +addPart(partId, name, qty, price)
-        +addService(serviceItemId, name, price)
+        +addService(serviceItemId, name, price, notes)
         +recalculateTotalCost()
     }
     class CustomerSnapshot {
@@ -186,6 +217,7 @@ stateDiagram-v2
 
     RECEIVED --> CANCELLED : cancel()
     IN_DIAGNOSIS --> CANCELLED : cancel()
+    AWAITING_APPROVAL --> CANCELLED : cancel()
     IN_EXECUTION --> CANCELLED : cancel()
     FINISHED --> CANCELLED : cancel()
     CANCELLED --> [*]

@@ -56,10 +56,13 @@ interfaces/     → rest (JAX-RS) + exception (mappers HTTP)
 - Controllers (`interfaces/rest`) **só chamam services**, nunca repositories.
 - Domínio é **rico**, não anêmico — a regra de negócio mora na entidade (ver Slide 4).
 - DTOs isolam o domínio da borda HTTP (nunca expomos entidade JPA).
-- **Trade-off assumido:** mantivemos JPA annotations dentro de `domain/model` (não é hexagonal
-  pura com ports/adapters). Decisão consciente: para um MVP CRUD + máquina-de-estados, a
-  hexagonal completa seria overengineering; camadas + domínio rico entregam testabilidade
-  suficiente sem fragmentação excessiva.
+- **Isolamento proporcional do domínio:** o **core domain** (`WorkOrder`) é um **POJO puro**, sem
+  JPA — referencia os demais aggregates **por identidade** (`CustomerSnapshot`/`VehicleSnapshot`) e
+  a persistência vive na infraestrutura (`WorkOrderEntity` + `WorkOrderMapper` + repository adapter).
+  Os **supporting domains** (`Client`, `Vehicle`, `Part`, `ServiceItem`) permanecem como entidades
+  JPA — decisão consciente: isola-se onde está a complexidade de negócio (a OS e suas invariantes),
+  sem pagar o custo de mapeamento nos CRUDs simples. Não é hexagonal completa (ports/adapters em
+  tudo): para um MVP, isolar só o núcleo entrega a testabilidade que importa sem fragmentação excessiva.
 
 ---
 
@@ -69,12 +72,16 @@ interfaces/     → rest (JAX-RS) + exception (mappers HTTP)
 peça (`WorkOrderPart`) e de serviço (`WorkOrderServiceItem`) — coleções `final`, expostas como
 `unmodifiableList`, garantindo que ninguém mexa nos itens por fora do agregado.
 
-- Entidades: `Client`, `Vehicle`, `Part` (+ `PartType`), `ServiceItem`, `WorkOrder`.
+- Aggregate root: `WorkOrder` (POJO puro), com linhas `WorkOrderPart`/`WorkOrderServiceItem`.
+- Entidades (aggregates): `Client`, `Vehicle`, `Part` (+ `PartType`), `ServiceItem`.
+- Value Objects: `CustomerSnapshot`, `VehicleSnapshot` (referência por identidade aos demais aggregates).
 - Enums: `ClientType`, `PartType {PECA, INSUMO}`, `WorkOrderStatus`.
 
-**Justificativa:** invariantes ficam protegidas no agregado. Ex.: só dá pra adicionar
-peça/serviço com a OS em estado editável; o estoque é debitado **dentro** do `addPart`. Atende
-a regra "regras de negócio pertencem ao domínio" e à *Linguagem Ubíqua* exigida no entregável DDD.
+**Justificativa:** invariantes ficam protegidas no agregado. Ex.: só dá pra adicionar peça/serviço
+com a OS em estado editável (`ensureEditable`) e o orçamento é recalculado no próprio agregado. Já o
+**estoque é coordenado pelo `WorkOrderService`** (cross-aggregate, mesma transação), porque envolve
+outro aggregate (`Part`) — um aggregate não deve mutar o estado de outro. Atende "regras de negócio
+pertencem ao domínio" e à *Linguagem Ubíqua* exigida no entregável DDD.
 
 ---
 
@@ -98,9 +105,10 @@ Cada transição valida o estado de origem via `requireStatus(...)`, lançando
 transição correta e ainda **carimba timestamps** (`diagnosisStartedAt`, `approvedAt`,
 `finishedAt`...), que depois alimentam a métrica de tempo médio.
 
-**Regra de negócio relevante:** ao **rejeitar/cancelar**, o estoque das peças é **devolvido**
-(`restoreStockOfAllParts()`); ao adicionar peça, é **debitado**. Liga a máquina de estados ao
-controle de estoque de forma transacional e consistente.
+**Regra de negócio relevante:** ao **rejeitar/cancelar**, o estoque das peças é **devolvido**; ao
+adicionar peça, é **debitado**. A transição de estado mora no agregado (`WorkOrder`), mas a
+devolução/reserva de estoque é **orquestrada pelo `WorkOrderService`** (coordenação entre os
+aggregates OS e Part, na mesma transação) — transacional e consistente.
 
 ---
 
@@ -110,8 +118,8 @@ controle de estoque de forma transacional e consistente.
 |-------------------------------------------------|--------------------------------------------------------------------------------------------|
 | Identificação do cliente por CPF/CNPJ           | `WorkOrderService.create` busca cliente por CPF/CNPJ normalizado                           |
 | Cadastro de veículo (placa, marca, modelo, ano) | entidade `Vehicle` + validação de placa                                                    |
-| Inclusão de serviços                            | `addService` (valida serviço ativo)                                                        |
-| Inclusão de peças/insumos                       | `addPart` (debita estoque)                                                                 |
+| Inclusão de serviços                            | `WorkOrderService.addService` valida serviço ativo → `WorkOrder.addService` registra a linha    |
+| Inclusão de peças/insumos                       | `WorkOrderService.addPart` debita estoque do `Part` → `WorkOrder.addPart` registra a linha       |
 | **Orçamento gerado automaticamente**            | `recalculateTotalCost()` soma peças + serviços a cada alteração; exposto via `getBudget()` |
 | Envio do orçamento p/ aprovação                 | `sendForApproval()` (recalcula e muda status)                                              |
 
@@ -172,7 +180,7 @@ total/abertas/finalizadas/canceladas e receita entregue.
 - `Part.minimumStock` + `Part.isLowStock()` — alerta de reposição por **estoque mínimo
   configurável por peça** (não um limite global fixo).
 - `GET /admin/parts/low-stock` — lista o que precisa repor.
-- Débito/crédito de estoque acoplado à máquina de estados da OS (Slide 4); `addPart` recusa peça inativa.
+- Débito/devolução de estoque coordenado pelo `WorkOrderService` junto às transições da OS (Slide 4); a inclusão recusa peça inativa.
 - **Lock otimista** (`@Version` em `Part`): débitos concorrentes não causam mais *lost update*;
   conflito retorna **409**, não 500.
 - **Soft-delete** (`Part.active`): excluir peça é exclusão lógica (preserva integridade com OS
@@ -321,7 +329,7 @@ revisão manual com riscos residuais explícitos.
 | Swagger                                                                                | ✅                               |
 | Dockerfile + docker-compose                                                            | ✅                               |
 | README explicativo                                                                     | ✅                               |
-| Documentação DDD (Event Storming, diagramas, Linguagem Ubíqua)                         | ✅ no Miro (entregável separado) |
+| Documentação DDD (Event Storming, diagramas, Linguagem Ubíqua)                         | ✅ `docs/DDD.md` (Mermaid) + Miro |
 | Relatório de vulnerabilidades                                                          | ✅                               |
 
 ---
@@ -330,8 +338,9 @@ revisão manual com riscos residuais explícitos.
 
 1. **Anti-overengineering proposital** — monólito em camadas, comunicação síncrona, sem
    eventos/CQRS. Justificado pelo escopo MVP.
-2. **Trade-off hexagonal** — domínio rico com JPA inline em vez de ports/adapters completos;
-   ganho de simplicidade sem perder testabilidade.
+2. **Isolamento proporcional** — core domain (`WorkOrder`) isolado de JPA (POJO + referência por
+   identidade + adapter de persistência); supporting domains seguem como entidades JPA. Sem
+   hexagonal completa em tudo (seria overengineering), mas com o núcleo de negócio testável sem infra.
 3. **Reparos adicionais pós-aprovação** ficaram **fora de escopo** (a máquina de estados só
    permite edição em `RECEIVED`/`IN_DIAGNOSIS`) — limite consciente do MVP.
 4. **Evolução:** rate limiting no login, refresh tokens, trilha de auditoria (A09),
