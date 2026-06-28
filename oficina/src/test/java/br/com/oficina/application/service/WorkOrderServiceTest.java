@@ -77,10 +77,10 @@ class WorkOrderServiceTest {
     }
 
     @Test
-    void listAll_shouldReturnAllOrders() {
-        when(workOrderRepository.listAll(0, 20)).thenReturn(List.of(workOrder));
+    void listActive_shouldReturnActiveOrders() {
+        when(workOrderRepository.findActive(0, 20)).thenReturn(List.of(workOrder));
 
-        List<WorkOrderResponseDto> result = workOrderService.listAll(0, 20);
+        List<WorkOrderResponseDto> result = workOrderService.listActive(0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst().orderNumber()).isEqualTo("OS-000001");

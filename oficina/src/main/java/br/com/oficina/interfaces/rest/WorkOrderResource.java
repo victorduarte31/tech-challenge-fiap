@@ -41,14 +41,20 @@ public class WorkOrderResource {
     }
 
     @GET
-    @Operation(summary = "Listar OS (paginado; filtro opcional por status)")
-    public List<WorkOrderResponseDto> listAll(@QueryParam("status") WorkOrderStatus status,
-                                              @QueryParam("page") @DefaultValue("0") int page,
-                                              @QueryParam("size") @DefaultValue("20") int size) {
+    @Operation(
+        summary = "Listar OS (paginado; filtro opcional por status)",
+        description = "Sem filtro, retorna apenas as OS ativas (exclui FINISHED/DELIVERED), " +
+                      "ordenadas por prioridade de status (Execução > Aguardando Aprovação > " +
+                      "Diagnóstico > Recebida) e, dentro do mesmo status, das mais antigas para " +
+                      "as mais recentes. Use o parâmetro status= para consultar OS encerradas."
+    )
+    public List<WorkOrderResponseDto> list(@QueryParam("status") WorkOrderStatus status,
+                                           @QueryParam("page") @DefaultValue("0") int page,
+                                           @QueryParam("size") @DefaultValue("20") int size) {
         if (status != null) {
             return listWorkOrders.listByStatus(status, page, size);
         }
-        return listWorkOrders.listAll(page, size);
+        return listWorkOrders.listActive(page, size);
     }
 
     @GET

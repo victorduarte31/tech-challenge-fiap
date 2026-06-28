@@ -21,7 +21,13 @@ public interface WorkOrderRepositoryPort {
 
     Optional<WorkOrder> findByOrderNumber(String orderNumber);
 
-    List<WorkOrder> listAll(int page, int size);
+    /**
+     * Lista as OS ativas (exclui logicamente {@code FINISHED}/{@code DELIVERED}),
+     * ordenadas por prioridade de status
+     * ({@code IN_EXECUTION > AWAITING_APPROVAL > IN_DIAGNOSIS > RECEIVED}) e, dentro
+     * do mesmo status, das mais antigas para as mais recentes ({@code createdAt ASC}).
+     */
+    List<WorkOrder> findActive(int page, int size);
 
     List<WorkOrder> findByStatus(WorkOrderStatus status, int page, int size);
 

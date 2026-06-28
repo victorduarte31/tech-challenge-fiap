@@ -45,8 +45,8 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
 
     @Override
     @Transactional(TxType.SUPPORTS)
-    public List<WorkOrderResponseDto> listAll(int page, int size) {
-        return workOrderRepository.listAll(Pagination.page(page), Pagination.cap(size)).stream()
+    public List<WorkOrderResponseDto> listActive(int page, int size) {
+        return workOrderRepository.findActive(Pagination.page(page), Pagination.cap(size)).stream()
             .map(WorkOrderResponseDto::from)
             .toList();
     }

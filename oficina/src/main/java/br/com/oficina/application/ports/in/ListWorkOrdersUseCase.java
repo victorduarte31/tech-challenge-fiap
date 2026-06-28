@@ -9,7 +9,8 @@ import java.util.List;
  */
 public interface ListWorkOrdersUseCase {
 
-    List<WorkOrderResponseDto> listAll(int page, int size);
+    /** Lista as OS ativas, ordenadas por prioridade de status e antiguidade. */
+    List<WorkOrderResponseDto> listActive(int page, int size);
 
     List<WorkOrderResponseDto> listByStatus(WorkOrderStatus status, int page, int size);
 

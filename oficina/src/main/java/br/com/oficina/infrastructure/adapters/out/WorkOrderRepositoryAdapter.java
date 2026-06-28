@@ -28,6 +28,11 @@ import java.util.Optional;
 @ApplicationScoped
 public class WorkOrderRepositoryAdapter implements WorkOrderRepositoryPort, PanacheRepository<WorkOrderEntity> {
 
+    private static final String ACTIVE_ORDER_QUERY =
+        "status not in (?1, ?2) " +
+        "order by case status " +
+        "when ?3 then 0 when ?4 then 1 when ?5 then 2 when ?6 then 3 else 4 end, createdAt asc";
+
     @Inject
     EntityManager em;
 
@@ -61,9 +66,19 @@ public class WorkOrderRepositoryAdapter implements WorkOrderRepositoryPort, Pana
         return find("orderNumber", orderNumber).firstResultOptional().map(mapper::toDomain);
     }
 
+    /**
+     * Ordenação por prioridade de status via {@code CASE} e antiguidade
+     * ({@code createdAt ASC}), excluindo logicamente OS já encerradas
+     * ({@code FINISHED}/{@code DELIVERED}). A prioridade é uma regra de exibição
+     * (infraestrutura de consulta), por isso vive no adapter e não no domínio.
+     */
     @Override
-    public List<WorkOrder> listAll(int page, int size) {
-        return findAll(Sort.by("id")).page(Page.of(page, size)).list().stream()
+    public List<WorkOrder> findActive(int page, int size) {
+        return find(ACTIVE_ORDER_QUERY,
+                WorkOrderStatus.FINISHED, WorkOrderStatus.DELIVERED,
+                WorkOrderStatus.IN_EXECUTION, WorkOrderStatus.AWAITING_APPROVAL,
+                WorkOrderStatus.IN_DIAGNOSIS, WorkOrderStatus.RECEIVED)
+            .page(Page.of(page, size)).list().stream()
             .map(mapper::toDomain)
             .toList();
     }
