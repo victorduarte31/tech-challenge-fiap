@@ -5,7 +5,11 @@ import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.*;
-import br.com.oficina.infrastructure.repository.*;
+import br.com.oficina.domain.ports.out.ClientRepositoryPort;
+import br.com.oficina.domain.ports.out.PartRepositoryPort;
+import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
+import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
+import br.com.oficina.domain.ports.out.WorkOrderRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,11 +28,11 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class WorkOrderServiceTest {
 
-    @Mock WorkOrderRepository workOrderRepository;
-    @Mock ClientRepository clientRepository;
-    @Mock VehicleRepository vehicleRepository;
-    @Mock PartRepository partRepository;
-    @Mock ServiceItemRepository serviceItemRepository;
+    @Mock WorkOrderRepositoryPort workOrderRepository;
+    @Mock ClientRepositoryPort clientRepository;
+    @Mock VehicleRepositoryPort vehicleRepository;
+    @Mock PartRepositoryPort partRepository;
+    @Mock ServiceItemRepositoryPort serviceItemRepository;
 
     @InjectMocks
     WorkOrderService workOrderService;
@@ -44,7 +48,7 @@ class WorkOrderServiceTest {
         client = new Client("Cliente Teste", "11144477735", ClientType.PF, null, null);
         DomainTestFixtures.setId(client, 1L);
 
-        vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, client);
+        vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, 1L);
         DomainTestFixtures.setId(vehicle, 1L);
 
         workOrder = new WorkOrder(
@@ -112,7 +116,7 @@ class WorkOrderServiceTest {
     @Test
     void create_withValidData_shouldCreateWorkOrder() {
         when(clientRepository.findByCpfCnpj("11144477735")).thenReturn(Optional.of(client));
-        when(vehicleRepository.findByIdOptional(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.fetchById(1L)).thenReturn(Optional.of(vehicle));
 
         WorkOrderCreateDto dto = new WorkOrderCreateDto(
             "111.444.777-35", 1L, "Revisão geral", null, null
@@ -127,12 +131,10 @@ class WorkOrderServiceTest {
 
     @Test
     void create_withWrongVehicleOwner_shouldThrowBusinessException() {
-        Client otherClient = new Client("Outro", "52998224725", ClientType.PF, null, null);
-        DomainTestFixtures.setId(otherClient, 2L);
-        DomainTestFixtures.setField(vehicle, "client", otherClient);
+        DomainTestFixtures.setField(vehicle, "clientId", 2L);
 
         when(clientRepository.findByCpfCnpj("11144477735")).thenReturn(Optional.of(client));
-        when(vehicleRepository.findByIdOptional(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.fetchById(1L)).thenReturn(Optional.of(vehicle));
 
         WorkOrderCreateDto dto = new WorkOrderCreateDto(
             "111.444.777-35", 1L, null, null, null
@@ -253,7 +255,7 @@ class WorkOrderServiceTest {
     void addPart_toEditableOrder_shouldDecrementStock() {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
 
         WorkOrderPartDto dto = new WorkOrderPartDto(1L, 2);
         workOrderService.addPart(1L, dto);
@@ -267,7 +269,7 @@ class WorkOrderServiceTest {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         DomainTestFixtures.setField(part, "stockQuantity", 1);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
 
         WorkOrderPartDto dto = new WorkOrderPartDto(1L, 5);
 
@@ -278,7 +280,7 @@ class WorkOrderServiceTest {
     @Test
     void addService_toEditableOrder_shouldAddWithBasePrice() {
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(serviceItem));
+        when(serviceItemRepository.fetchById(1L)).thenReturn(Optional.of(serviceItem));
 
         WorkOrderServiceDto dto = new WorkOrderServiceDto(1L, null);
         workOrderService.addService(1L, dto);
@@ -291,7 +293,7 @@ class WorkOrderServiceTest {
     void addService_withInactiveService_shouldThrowBusinessException() {
         serviceItem.deactivate();
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(serviceItem));
+        when(serviceItemRepository.fetchById(1L)).thenReturn(Optional.of(serviceItem));
 
         WorkOrderServiceDto dto = new WorkOrderServiceDto(1L, null);
 
@@ -304,7 +306,7 @@ class WorkOrderServiceTest {
     void reject_shouldRestoreStockOfAllParts() {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
 
         workOrderService.addPart(1L, new WorkOrderPartDto(1L, 3));
         assertThat(part.getStockQuantity()).isEqualTo(7);
@@ -341,7 +343,7 @@ class WorkOrderServiceTest {
     void rejectByOrderNumber_withMatchingCpfCnpj_shouldRejectAndRestoreStock() {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
         workOrderService.addPart(1L, new WorkOrderPartDto(1L, 3));
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
         when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
@@ -366,7 +368,7 @@ class WorkOrderServiceTest {
     void cancel_shouldRestoreStockOfAllParts() {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
 
         workOrderService.addPart(1L, new WorkOrderPartDto(1L, 4));
         assertThat(part.getStockQuantity()).isEqualTo(6);
@@ -381,7 +383,7 @@ class WorkOrderServiceTest {
     void addPart_toFinishedOrder_shouldThrowBusinessException() {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.FINISHED);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(part));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
 
         WorkOrderPartDto dto = new WorkOrderPartDto(1L, 1);
 

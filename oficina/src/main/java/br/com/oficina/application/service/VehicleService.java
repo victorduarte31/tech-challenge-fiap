@@ -5,10 +5,9 @@ import br.com.oficina.application.dto.VehicleRequestDto;
 import br.com.oficina.application.dto.VehicleResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
-import br.com.oficina.domain.model.Client;
 import br.com.oficina.domain.model.Vehicle;
-import br.com.oficina.infrastructure.repository.ClientRepository;
-import br.com.oficina.infrastructure.repository.VehicleRepository;
+import br.com.oficina.domain.ports.out.ClientRepositoryPort;
+import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -17,11 +16,10 @@ import java.util.List;
 public class VehicleService {
 
     public static final String VEICULO = "Veículo";
-    VehicleRepository vehicleRepository;
+    VehicleRepositoryPort vehicleRepository;
+    ClientRepositoryPort clientRepository;
 
-    ClientRepository clientRepository;
-
-    public VehicleService(VehicleRepository vehicleRepository, ClientRepository clientRepository) {
+    public VehicleService(VehicleRepositoryPort vehicleRepository, ClientRepositoryPort clientRepository) {
         this.vehicleRepository = vehicleRepository;
         this.clientRepository = clientRepository;
     }
@@ -33,7 +31,7 @@ public class VehicleService {
     }
 
     public VehicleResponseDto findById(Long id) {
-        Vehicle vehicle = vehicleRepository.findByIdOptional(id)
+        Vehicle vehicle = vehicleRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(VEICULO, id));
         return VehicleResponseDto.from(vehicle);
     }
@@ -50,35 +48,37 @@ public class VehicleService {
         if (vehicleRepository.existsByLicensePlate(normalized)) {
             throw new BusinessException("Placa já cadastrada: " + dto.licensePlate());
         }
-        Client client = clientRepository.findByIdOptional(dto.clientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Cliente", dto.clientId()));
+        ensureClientExists(dto.clientId());
 
-        Vehicle vehicle = new Vehicle(normalized, dto.brand(), dto.model(), dto.productionYear(), client);
-        vehicleRepository.persist(vehicle);
-        return VehicleResponseDto.from(vehicle);
+        Vehicle vehicle = new Vehicle(normalized, dto.brand(), dto.model(), dto.productionYear(), dto.clientId());
+        return VehicleResponseDto.from(vehicleRepository.save(vehicle));
     }
 
     @Transactional
     public VehicleResponseDto update(Long id, VehicleRequestDto dto) {
-        Vehicle vehicle = vehicleRepository.findByIdOptional(id)
+        Vehicle vehicle = vehicleRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(VEICULO, id));
 
         String normalized = normalizeLicensePlate(dto.licensePlate());
         if (!vehicle.getLicensePlate().equals(normalized) && vehicleRepository.existsByLicensePlate(normalized)) {
             throw new BusinessException("Placa já cadastrada: " + dto.licensePlate());
         }
-        Client client = clientRepository.findByIdOptional(dto.clientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Cliente", dto.clientId()));
+        ensureClientExists(dto.clientId());
 
-        vehicle.update(normalized, dto.brand(), dto.model(), dto.productionYear(), client);
-        return VehicleResponseDto.from(vehicle);
+        vehicle.update(normalized, dto.brand(), dto.model(), dto.productionYear(), dto.clientId());
+        return VehicleResponseDto.from(vehicleRepository.save(vehicle));
     }
 
     @Transactional
     public void delete(Long id) {
-        Vehicle vehicle = vehicleRepository.findByIdOptional(id)
+        vehicleRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(VEICULO, id));
-        vehicleRepository.delete(vehicle);
+        vehicleRepository.removeById(id);
+    }
+
+    private void ensureClientExists(Long clientId) {
+        clientRepository.fetchById(clientId)
+            .orElseThrow(() -> new ResourceNotFoundException("Cliente", clientId));
     }
 
     private String normalizeLicensePlate(String plate) {

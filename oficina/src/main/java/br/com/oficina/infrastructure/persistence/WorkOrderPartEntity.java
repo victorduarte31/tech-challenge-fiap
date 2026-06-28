@@ -1,6 +1,5 @@
 package br.com.oficina.infrastructure.persistence;
 
-import br.com.oficina.domain.model.Part;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 
@@ -21,7 +20,7 @@ public class WorkOrderPartEntity {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "part_id", nullable = false)
-    private Part part;
+    private PartEntity part;
 
     @Column(nullable = false)
     private Integer quantity;
@@ -32,7 +31,7 @@ public class WorkOrderPartEntity {
     public WorkOrderPartEntity() {
     }
 
-    public WorkOrderPartEntity(WorkOrderEntity workOrder, Part part, Integer quantity, BigDecimal unitPrice) {
+    public WorkOrderPartEntity(WorkOrderEntity workOrder, PartEntity part, Integer quantity, BigDecimal unitPrice) {
         this.workOrder = workOrder;
         this.part = part;
         this.quantity = quantity;
@@ -41,7 +40,7 @@ public class WorkOrderPartEntity {
 
     public Long getId() { return id; }
     public WorkOrderEntity getWorkOrder() { return workOrder; }
-    public Part getPart() { return part; }
+    public PartEntity getPart() { return part; }
     public Integer getQuantity() { return quantity; }
     public BigDecimal getUnitPrice() { return unitPrice; }
 }

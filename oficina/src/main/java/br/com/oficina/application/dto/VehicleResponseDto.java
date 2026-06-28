@@ -16,7 +16,7 @@ public record VehicleResponseDto(
     public static VehicleResponseDto from(Vehicle v) {
         return new VehicleResponseDto(
             v.getId(), v.getLicensePlate(), v.getBrand(), v.getModel(),
-            v.getProductionYear(), v.getClient().getId(), v.getClient().getName(), v.getCreatedAt()
+            v.getProductionYear(), v.getClientId(), v.getClientName(), v.getCreatedAt()
         );
     }
 }

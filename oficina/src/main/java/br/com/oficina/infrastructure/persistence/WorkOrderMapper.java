@@ -1,10 +1,6 @@
 package br.com.oficina.infrastructure.persistence;
 
-import br.com.oficina.domain.model.Client;
 import br.com.oficina.domain.model.CustomerSnapshot;
-import br.com.oficina.domain.model.Part;
-import br.com.oficina.domain.model.ServiceItem;
-import br.com.oficina.domain.model.Vehicle;
 import br.com.oficina.domain.model.VehicleSnapshot;
 import br.com.oficina.domain.model.WorkOrder;
 import br.com.oficina.domain.model.WorkOrderPart;
@@ -56,8 +52,8 @@ public class WorkOrderMapper {
 
     public WorkOrderEntity toNewEntity(WorkOrder d) {
         WorkOrderEntity e = new WorkOrderEntity();
-        e.setClient(em.getReference(Client.class, d.getCustomer().clientId()));
-        e.setVehicle(em.getReference(Vehicle.class, d.getVehicle().vehicleId()));
+        e.setClient(em.getReference(ClientEntity.class, d.getCustomer().clientId()));
+        e.setVehicle(em.getReference(VehicleEntity.class, d.getVehicle().vehicleId()));
         applyState(e, d);
         return e;
     }
@@ -87,7 +83,7 @@ public class WorkOrderMapper {
         for (WorkOrderPart line : d.getParts()) {
             if (line.getId() == null) {
                 e.getParts().add(new WorkOrderPartEntity(
-                    e, em.getReference(Part.class, line.getPartId()), line.getQuantity(), line.getUnitPrice()));
+                    e, em.getReference(PartEntity.class, line.getPartId()), line.getQuantity(), line.getUnitPrice()));
             }
         }
     }
@@ -100,7 +96,7 @@ public class WorkOrderMapper {
         for (WorkOrderServiceItem line : d.getServices()) {
             if (line.getId() == null) {
                 e.getServices().add(new WorkOrderServiceItemEntity(
-                    e, em.getReference(ServiceItem.class, line.getServiceItemId()), line.getPrice(), line.getNotes()));
+                    e, em.getReference(ServiceItemEntity.class, line.getServiceItemId()), line.getPrice(), line.getNotes()));
             }
         }
     }

@@ -6,7 +6,7 @@ import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Client;
 import br.com.oficina.domain.model.ClientType;
-import br.com.oficina.infrastructure.repository.ClientRepository;
+import br.com.oficina.domain.ports.out.ClientRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.*;
 class ClientServiceTest {
 
     @Mock
-    ClientRepository clientRepository;
+    ClientRepositoryPort clientRepository;
 
     @InjectMocks
     ClientService clientService;
@@ -53,7 +53,7 @@ class ClientServiceTest {
 
     @Test
     void findById_whenExists_shouldReturnDto() {
-        when(clientRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleClient));
+        when(clientRepository.fetchById(1L)).thenReturn(Optional.of(sampleClient));
 
         ClientResponseDto result = clientService.findById(1L);
 
@@ -63,7 +63,7 @@ class ClientServiceTest {
 
     @Test
     void findById_whenNotFound_shouldThrowNotFoundException() {
-        when(clientRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(clientRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> clientService.findById(99L))
             .isInstanceOf(ResourceNotFoundException.class)
@@ -90,7 +90,7 @@ class ClientServiceTest {
     @Test
     void create_withNewCpfCnpj_shouldPersistAndReturn() {
         when(clientRepository.existsByCpfCnpj("11144477735")).thenReturn(false);
-        doNothing().when(clientRepository).persist(any(Client.class));
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ClientRequestDto dto = new ClientRequestDto(
             "João Silva", "111.444.777-35", ClientType.PF, "joao@email.com", "11999"
@@ -100,7 +100,7 @@ class ClientServiceTest {
 
         assertThat(result.name()).isEqualTo("João Silva");
         assertThat(result.cpfCnpj()).isEqualTo("11144477735");
-        verify(clientRepository).persist(any(Client.class));
+        verify(clientRepository).save(any(Client.class));
     }
 
     @Test
@@ -118,8 +118,9 @@ class ClientServiceTest {
 
     @Test
     void update_whenExists_shouldUpdateFields() {
-        when(clientRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleClient));
+        when(clientRepository.fetchById(1L)).thenReturn(Optional.of(sampleClient));
         when(clientRepository.existsByCpfCnpj("52998224725")).thenReturn(false);
+        when(clientRepository.save(any(Client.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ClientRequestDto dto = new ClientRequestDto(
             "João Updated", "529.982.247-25", ClientType.PF, "new@email.com", "11888"
@@ -133,7 +134,7 @@ class ClientServiceTest {
 
     @Test
     void update_whenNotFound_shouldThrow() {
-        when(clientRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(clientRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         ClientRequestDto dto = new ClientRequestDto(
             "Test", "11144477735", ClientType.PF, null, null
@@ -145,16 +146,15 @@ class ClientServiceTest {
 
     @Test
     void delete_whenExists_shouldDeleteClient() {
-        when(clientRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleClient));
-        doNothing().when(clientRepository).delete(sampleClient);
+        when(clientRepository.fetchById(1L)).thenReturn(Optional.of(sampleClient));
 
         assertThatCode(() -> clientService.delete(1L)).doesNotThrowAnyException();
-        verify(clientRepository).delete(sampleClient);
+        verify(clientRepository).removeById(1L);
     }
 
     @Test
     void delete_whenNotFound_shouldThrow() {
-        when(clientRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(clientRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> clientService.delete(99L))
             .isInstanceOf(ResourceNotFoundException.class);

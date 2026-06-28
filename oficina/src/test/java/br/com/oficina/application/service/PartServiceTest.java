@@ -6,7 +6,7 @@ import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
 import br.com.oficina.domain.model.PartType;
-import br.com.oficina.infrastructure.repository.PartRepository;
+import br.com.oficina.domain.ports.out.PartRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.*;
 class PartServiceTest {
 
     @Mock
-    PartRepository partRepository;
+    PartRepositoryPort partRepository;
 
     @InjectMocks
     PartService partService;
@@ -53,7 +53,7 @@ class PartServiceTest {
 
     @Test
     void findById_whenExists_shouldReturn() {
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
 
         PartResponseDto result = partService.findById(1L);
 
@@ -63,7 +63,7 @@ class PartServiceTest {
 
     @Test
     void findById_whenNotFound_shouldThrow() {
-        when(partRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(partRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> partService.findById(99L))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -80,7 +80,7 @@ class PartServiceTest {
 
     @Test
     void create_shouldPersistAndReturn() {
-        doNothing().when(partRepository).persist(any(Part.class));
+        when(partRepository.save(any(Part.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PartRequestDto dto = new PartRequestDto(
             "Filtro de Ar", "Filtro", new BigDecimal("29.90"), 10, "UN", 5, PartType.PECA
@@ -90,12 +90,13 @@ class PartServiceTest {
 
         assertThat(result.name()).isEqualTo("Filtro de Ar");
         assertThat(result.stockQuantity()).isEqualTo(10);
-        verify(partRepository).persist(any(Part.class));
+        verify(partRepository).save(any(Part.class));
     }
 
     @Test
     void update_whenExists_shouldUpdateFields() {
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.save(any(Part.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PartRequestDto dto = new PartRequestDto(
             "Óleo Atualizado", "2 litros", new BigDecimal("89.90"), 15, "L", 3, PartType.INSUMO
@@ -109,7 +110,8 @@ class PartServiceTest {
 
     @Test
     void adjustStock_increase_shouldAddToStock() {
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.save(any(Part.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PartResponseDto result = partService.adjustStock(1L, 10);
 
@@ -118,7 +120,8 @@ class PartServiceTest {
 
     @Test
     void adjustStock_decrease_shouldSubtractFromStock() {
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.save(any(Part.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PartResponseDto result = partService.adjustStock(1L, -5);
 
@@ -127,7 +130,7 @@ class PartServiceTest {
 
     @Test
     void adjustStock_belowZero_shouldThrowException() {
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
 
         assertThatThrownBy(() -> partService.adjustStock(1L, -30))
             .isInstanceOf(BusinessException.class)
@@ -143,18 +146,18 @@ class PartServiceTest {
 
     @Test
     void delete_whenExists_shouldSoftDelete() {
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
 
         assertThatCode(() -> partService.delete(1L)).doesNotThrowAnyException();
 
-        // Soft-delete: peça é desativada, não removida fisicamente (preserva integridade com OS históricas)
+        // Soft-delete: peça é desativada (não removida fisicamente) e persistida
         assertThat(samplePart.isActive()).isFalse();
-        verify(partRepository, never()).delete(any(Part.class));
+        verify(partRepository).save(samplePart);
     }
 
     @Test
     void delete_whenNotFound_shouldThrow() {
-        when(partRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(partRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> partService.delete(99L))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -163,7 +166,8 @@ class PartServiceTest {
     @Test
     void reactivate_whenExists_shouldActivatePart() {
         samplePart.deactivate();
-        when(partRepository.findByIdOptional(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.fetchById(1L)).thenReturn(Optional.of(samplePart));
+        when(partRepository.save(any(Part.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PartResponseDto result = partService.reactivate(1L);
 
@@ -173,7 +177,7 @@ class PartServiceTest {
 
     @Test
     void reactivate_whenNotFound_shouldThrow() {
-        when(partRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(partRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> partService.reactivate(99L))
             .isInstanceOf(ResourceNotFoundException.class);

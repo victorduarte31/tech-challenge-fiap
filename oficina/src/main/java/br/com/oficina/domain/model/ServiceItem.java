@@ -1,41 +1,23 @@
 package br.com.oficina.domain.model;
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "service_items")
+/**
+ * Serviço oferecido pela oficina — modelo de domínio puro, sem dependência de
+ * framework de persistência. A tradução para a tabela {@code service_items} é feita
+ * pelo {@code ServiceItemEntity}/{@code ServiceItemMapper} na camada de infraestrutura.
+ */
 public class ServiceItem {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, length = 100)
     private String name;
-
-    @Column
     private String description;
-
-    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal basePrice;
-
-    @Column(name = "estimated_duration_minutes", nullable = false)
     private Integer estimatedDurationMinutes;
-
-    @Column(nullable = false)
     private Boolean active = true;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    protected ServiceItem() {
-        // Required by JPA
-    }
 
     public ServiceItem(String name, String description, BigDecimal basePrice, Integer estimatedDurationMinutes) {
         this.name = name;
@@ -45,15 +27,24 @@ public class ServiceItem {
         this.active = true;
     }
 
-    @PrePersist
-    void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    private ServiceItem() {
+        // Reconstrução via rehydrate().
     }
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = LocalDateTime.now();
+    /** Reconstrói o serviço a partir da persistência (uso exclusivo do mapper). */
+    public static ServiceItem rehydrate(Long id, String name, String description, BigDecimal basePrice,
+                                        Integer estimatedDurationMinutes, Boolean active,
+                                        LocalDateTime createdAt, LocalDateTime updatedAt) {
+        ServiceItem s = new ServiceItem();
+        s.id = id;
+        s.name = name;
+        s.description = description;
+        s.basePrice = basePrice;
+        s.estimatedDurationMinutes = estimatedDurationMinutes;
+        s.active = active;
+        s.createdAt = createdAt;
+        s.updatedAt = updatedAt;
+        return s;
     }
 
     public void update(String name, String description, BigDecimal basePrice, Integer estimatedDurationMinutes) {
