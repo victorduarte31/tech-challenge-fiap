@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.*;
 class WorkOrderBudgetTest {
 
     private WorkOrder newWorkOrder() {
-        CustomerSnapshot customer = new CustomerSnapshot(1L, "Maria", "11144477735");
+        CustomerSnapshot customer = new CustomerSnapshot(1L, "Maria", "11144477735", "maria@teste.com");
         VehicleSnapshot vehicle = new VehicleSnapshot(1L, "ABC1234", "Toyota", "Corolla", 2020);
         return new WorkOrder(customer, vehicle, null);
     }

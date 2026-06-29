@@ -27,7 +27,8 @@ public class WorkOrderMapper {
 
     public WorkOrder toDomain(WorkOrderEntity e) {
         CustomerSnapshot customer = new CustomerSnapshot(
-            e.getClient().getId(), e.getClient().getName(), e.getClient().getCpfCnpj());
+            e.getClient().getId(), e.getClient().getName(), e.getClient().getCpfCnpj(),
+            e.getClient().getEmail());
 
         VehicleSnapshot vehicle = new VehicleSnapshot(
             e.getVehicle().getId(), e.getVehicle().getLicensePlate(), e.getVehicle().getBrand(),

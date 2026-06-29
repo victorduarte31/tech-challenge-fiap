@@ -7,10 +7,12 @@ import br.com.oficina.application.ports.in.CreateWorkOrderUseCase;
 import br.com.oficina.application.ports.in.ListWorkOrdersUseCase;
 import br.com.oficina.application.ports.in.ManageWorkOrderItemsUseCase;
 import br.com.oficina.application.Pagination;
+import br.com.oficina.domain.event.WorkOrderStatusChangedEvent;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.*;
 import br.com.oficina.domain.ports.out.ClientRepositoryPort;
+import br.com.oficina.domain.ports.out.NotificationGatewayPort;
 import br.com.oficina.domain.ports.out.PartRepositoryPort;
 import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
 import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
@@ -30,17 +32,20 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     VehicleRepositoryPort vehicleRepository;
     PartRepositoryPort partRepository;
     ServiceItemRepositoryPort serviceItemRepository;
+    NotificationGatewayPort notificationGateway;
 
     public WorkOrderService(WorkOrderRepositoryPort workOrderRepository,
                             ClientRepositoryPort clientRepository,
                             VehicleRepositoryPort vehicleRepository,
                             PartRepositoryPort partRepository,
-                            ServiceItemRepositoryPort serviceItemRepository) {
+                            ServiceItemRepositoryPort serviceItemRepository,
+                            NotificationGatewayPort notificationGateway) {
         this.workOrderRepository = workOrderRepository;
         this.clientRepository = clientRepository;
         this.vehicleRepository = vehicleRepository;
         this.partRepository = partRepository;
         this.serviceItemRepository = serviceItemRepository;
+        this.notificationGateway = notificationGateway;
     }
 
     @Override
@@ -154,7 +159,9 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     public WorkOrderResponseDto sendForApproval(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.sendForApproval();
-        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
+        WorkOrder saved = workOrderRepository.save(wo);
+        notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        return WorkOrderResponseDto.from(saved);
     }
 
     @Override
@@ -179,7 +186,9 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     public WorkOrderResponseDto complete(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.complete();
-        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
+        WorkOrder saved = workOrderRepository.save(wo);
+        notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        return WorkOrderResponseDto.from(saved);
     }
 
     @Override
@@ -187,7 +196,9 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     public WorkOrderResponseDto deliver(Long id) {
         WorkOrder wo = findWorkOrder(id);
         wo.deliver();
-        return WorkOrderResponseDto.from(workOrderRepository.save(wo));
+        WorkOrder saved = workOrderRepository.save(wo);
+        notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        return WorkOrderResponseDto.from(saved);
     }
 
     @Override
@@ -268,7 +279,7 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     }
 
     private static CustomerSnapshot snapshotOf(Client client) {
-        return new CustomerSnapshot(client.getId(), client.getName(), client.getCpfCnpj());
+        return new CustomerSnapshot(client.getId(), client.getName(), client.getCpfCnpj(), client.getEmail());
     }
 
     private static VehicleSnapshot snapshotOf(Vehicle vehicle) {

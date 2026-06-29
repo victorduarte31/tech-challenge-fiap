@@ -6,6 +6,7 @@ import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.*;
 import br.com.oficina.domain.ports.out.ClientRepositoryPort;
+import br.com.oficina.domain.ports.out.NotificationGatewayPort;
 import br.com.oficina.domain.ports.out.PartRepositoryPort;
 import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
 import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
@@ -33,6 +34,7 @@ class WorkOrderServiceTest {
     @Mock VehicleRepositoryPort vehicleRepository;
     @Mock PartRepositoryPort partRepository;
     @Mock ServiceItemRepositoryPort serviceItemRepository;
+    @Mock NotificationGatewayPort notificationGateway;
 
     @InjectMocks
     WorkOrderService workOrderService;
@@ -52,7 +54,7 @@ class WorkOrderServiceTest {
         DomainTestFixtures.setId(vehicle, 1L);
 
         workOrder = new WorkOrder(
-            new CustomerSnapshot(1L, "Cliente Teste", "11144477735"),
+            new CustomerSnapshot(1L, "Cliente Teste", "11144477735", "cliente@teste.com"),
             new VehicleSnapshot(1L, "ABC1234", "Toyota", "Corolla", 2020),
             null);
         DomainTestFixtures.setId(workOrder, 1L);

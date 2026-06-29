@@ -21,10 +21,13 @@
         <jacoco.version>0.8.13</jacoco.version>
         <!-- Versões alinhadas para mitigar CVEs reportados pelo Mend.io -->
         <commons-lang3.version>3.18.0</commons-lang3.version>
-        <plexus-utils.version>4.0.2</plexus-utils.version>
-        <jackson.version>2.19.0</jackson.version>
+        <plexus-utils.version>4.0.3</plexus-utils.version>
+        <jackson.version>2.22.0</jackson.version>
         <postgresql.jdbc.version>42.7.7</postgresql.jdbc.version>
         <assertj.version>3.27.7</assertj.version>
+        <!-- Overrides de transitivas do quarkus-mailer (vertx-mail-client -> vertx -> netty) -->
+        <netty.version>4.1.135.Final</netty.version>
+        <vertx.version>4.5.28</vertx.version>
     </properties>
 
     <dependencyManagement>
@@ -51,6 +54,21 @@
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>${postgresql.jdbc.version}</version>
+            </dependency>
+            <!-- Importado ANTES do quarkus-bom para sobrepor as versões transitivas vulneráveis -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.vertx</groupId>
+                <artifactId>vertx-stack-depchain</artifactId>
+                <version>${vertx.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>${quarkus.platform.group-id}</groupId>
@@ -123,6 +141,12 @@
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-smallrye-health</artifactId>
+        </dependency>
+
+        <!-- E-mail (notificações de mudança de status da OS) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-mailer</artifactId>
         </dependency>
 
         <!-- Jackson for dates -->
