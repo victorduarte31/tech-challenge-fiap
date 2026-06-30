@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 public record PublicWorkOrderStatusDto(
     String orderNumber,
     WorkOrderStatus status,
+    String statusLabel,
     LocalDateTime createdAt,
     LocalDateTime sentForApprovalAt,
     LocalDateTime approvedAt,
@@ -21,6 +22,7 @@ public record PublicWorkOrderStatusDto(
         return new PublicWorkOrderStatusDto(
             dto.orderNumber(),
             dto.status(),
+            WorkOrderStatusLabel.of(dto.status()),
             dto.createdAt(),
             dto.sentForApprovalAt(),
             dto.approvedAt(),
