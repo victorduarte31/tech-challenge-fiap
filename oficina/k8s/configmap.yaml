@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-config
+  namespace: oficina
+data:
+  QUARKUS_PROFILE: "prod"
+  DB_NAME: "oficina_db"
+  DB_PORT: "5432"
+  JWT_ISSUER: "oficina-api"
+  JWT_EXPIRATION_HOURS: "8"
+  CORS_ALLOWED_ORIGINS: "https://oficina.example.com"
+  MAILER_FROM: "nao-responda@oficina.com"
+  MAILER_PORT: "587"
+  MAILER_START_TLS: "REQUIRED"
+  # false por padrão: recriar credenciais padrão a cada rollout não faz sentido em produção real.
+  # Para a gravação do vídeo demonstrativo, pode trocar para "true" (login pronto) — nesse caso,
+  # defina senhas reais em APP_SEED_ADMIN_PASSWORD/APP_SEED_MECHANIC_PASSWORD no secret.yaml.
+  APP_SEED_ENABLED: "false"
+  APP_SEED_ADMIN_USERNAME: "admin"
+  APP_SEED_MECHANIC_USERNAME: "mecanico"

@@ -7,45 +7,45 @@
 
 A linguagem ubíqua estabelece um vocabulário compartilhado entre especialistas de domínio e desenvolvedores.
 
-| Termo                     | Definição                                                                                                                                    |
-|---------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ordem de Serviço (OS)** | Documento que registra todos os serviços e peças relacionados ao atendimento de um veículo. Possui um ciclo de vida bem definido com status. |
-| **Cliente**               | Pessoa física (CPF) ou jurídica (CNPJ) que solicita serviços da oficina.                                                                     |
-| **Veículo**               | Automóvel identificado por placa, marca, modelo e ano pertencente a um cliente.                                                              |
-| **Diagnóstico**           | Análise técnica realizada pelo mecânico para identificar problemas no veículo.                                                               |
-| **Orçamento**             | Estimativa de custo calculada automaticamente com base nos serviços e peças da OS.                                                           |
-| **Aprovação**             | Autorização do cliente para execução dos serviços após recebimento do orçamento.                                                             |
-| **Peça/Insumo**           | Material consumido na execução do serviço (ex.: óleo, filtro, pastilha de freio).                                                            |
-| **Estoque**               | Quantidade disponível de peças e insumos para uso nas ordens de serviço.                                                                     |
-| **Catálogo de Serviços**  | Conjunto de serviços oferecidos pela oficina com preço base e duração estimada.                                                              |
-| **Mecânico**              | Profissional responsável pelo diagnóstico e execução dos serviços.                                                                           |
-| **Entrega**               | Devolução do veículo ao cliente após conclusão dos serviços.                                                                                 |
-| **Status da OS**          | Estado atual da ordem de serviço no seu ciclo de vida.                                                                                       |
-| **Tempo de Execução**     | Duração entre o início da execução e a conclusão dos serviços.                                                                               |
+| Termo                     | Definição                                                                                                                                                                                                                                                                                                |
+|---------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ordem de Serviço (OS)** | Documento que registra todos os serviços e peças relacionados ao atendimento de um veículo. Possui um ciclo de vida bem definido com status.                                                                                                                                                             |
+| **Cliente**               | Pessoa física (CPF) ou jurídica (CNPJ) que solicita serviços da oficina.                                                                                                                                                                                                                                 |
+| **Veículo**               | Automóvel identificado por placa, marca, modelo e ano pertencente a um cliente.                                                                                                                                                                                                                          |
+| **Diagnóstico**           | Análise técnica realizada pelo mecânico para identificar problemas no veículo.                                                                                                                                                                                                                           |
+| **Orçamento**             | Estimativa de custo calculada automaticamente com base nos serviços e peças da OS.                                                                                                                                                                                                                       |
+| **Aprovação**             | Autorização do cliente para execução dos serviços após recebimento do orçamento.                                                                                                                                                                                                                         |
+| **Peça/Insumo**           | Material consumido na execução do serviço (ex.: óleo, filtro, pastilha de freio).                                                                                                                                                                                                                        |
+| **Estoque**               | Quantidade disponível de peças e insumos para uso nas ordens de serviço.                                                                                                                                                                                                                                 |
+| **Catálogo de Serviços**  | Conjunto de serviços oferecidos pela oficina com preço base e duração estimada.                                                                                                                                                                                                                          |
+| **Mecânico**              | Profissional responsável pelo diagnóstico e execução dos serviços.                                                                                                                                                                                                                                       |
+| **Entrega**               | Devolução do veículo ao cliente após conclusão dos serviços.                                                                                                                                                                                                                                             |
+| **Status da OS**          | Estado atual da ordem de serviço no seu ciclo de vida.                                                                                                                                                                                                                                                   |
+| **Tempo de Execução**     | Duração entre o início da execução e a conclusão dos serviços.                                                                                                                                                                                                                                           |
 | **Snapshot**              | Projeção em memória dos dados de outro aggregate (cliente/veículo) ou da linha de item, usada para manter a OS isolada do JPA. Apenas o **preço** (unitário da peça / do serviço) é persistido e congelado na linha; nome, CPF/CNPJ e placa são lidos por *join* na leitura e refletem o cadastro atual. |
 
 ### Glossário PT ↔ EN (código)
 
-| Português               | Código (inglês)                 |
-|-------------------------|---------------------------------|
-| Ordem de Serviço (OS)   | `WorkOrder`                     |
-| Recebida                | `RECEIVED`                      |
-| Em diagnóstico          | `IN_DIAGNOSIS`                  |
-| Aguardando aprovação    | `AWAITING_APPROVAL`             |
-| Em execução             | `IN_EXECUTION`                  |
-| Finalizada              | `FINISHED`                      |
-| Entregue                | `DELIVERED`                     |
-| Cancelada               | `CANCELLED`                     |
-| Cliente                 | `Client`                        |
-| Veículo                 | `Vehicle`                       |
-| Peça                    | `Part` (`PartType.PECA`)        |
-| Insumo                  | `Part` (`PartType.INSUMO`)      |
-| Serviço (catálogo)      | `ServiceItem`                   |
-| Linha de peça da OS     | `WorkOrderPart`                 |
-| Linha de serviço da OS  | `WorkOrderServiceItem`          |
-| Orçamento               | `getBudget()` / `totalCost`     |
-| Estoque                 | `stockQuantity`                 |
-| Estoque mínimo          | `minimumStock` / `isLowStock()` |
+| Português              | Código (inglês)                 |
+|------------------------|---------------------------------|
+| Ordem de Serviço (OS)  | `WorkOrder`                     |
+| Recebida               | `RECEIVED`                      |
+| Em diagnóstico         | `IN_DIAGNOSIS`                  |
+| Aguardando aprovação   | `AWAITING_APPROVAL`             |
+| Em execução            | `IN_EXECUTION`                  |
+| Finalizada             | `FINISHED`                      |
+| Entregue               | `DELIVERED`                     |
+| Cancelada              | `CANCELLED`                     |
+| Cliente                | `Client`                        |
+| Veículo                | `Vehicle`                       |
+| Peça                   | `Part` (`PartType.PECA`)        |
+| Insumo                 | `Part` (`PartType.INSUMO`)      |
+| Serviço (catálogo)     | `ServiceItem`                   |
+| Linha de peça da OS    | `WorkOrderPart`                 |
+| Linha de serviço da OS | `WorkOrderServiceItem`          |
+| Orçamento              | `getBudget()` / `totalCost`     |
+| Estoque                | `stockQuantity`                 |
+| Estoque mínimo         | `minimumStock` / `isLowStock()` |
 
 ---
 
@@ -91,7 +91,8 @@ flowchart TB
 - **Supporting — Clientes e Veículos:** CRUD de clientes (CPF/CNPJ) e veículos.
 - **Supporting — Catálogo e Estoque:** catálogo de serviços e controle de estoque de peças.
 - **Generic — Segurança:** autenticação JWT e controle de acesso por papel.
-- **Acompanhamento Público (canal, não um bounded context):** interface REST aberta (`PublicTrackingResource`) para o cliente consultar e aprovar/rejeitar a própria OS, expondo uma visão restrita do Core Domain (valida CPF/CNPJ).
+- **Acompanhamento Público (canal, não um bounded context):** interface REST aberta (`PublicTrackingResource`) para o
+  cliente consultar e aprovar/rejeitar a própria OS, expondo uma visão restrita do Core Domain (valida CPF/CNPJ).
 
 ---
 
@@ -183,7 +184,8 @@ classDiagram
 
 **Domain Services / comportamento de domínio**
 
-- `WorkOrder.startDiagnosis() / sendForApproval() / approve() / reject() / complete() / deliver() / cancel()` — transições de estado válidas.
+- `WorkOrder.startDiagnosis() / sendForApproval() / approve() / reject() / complete() / deliver() / cancel()` —
+  transições de estado válidas.
 - `WorkOrder.sendForApproval()` — recalcula `totalCost` antes da transição.
 - `WorkOrder.recalculateTotalCost()` — orçamento = Σ subtotais de peças + Σ preços de serviços.
 - `Part.decreaseStock(qty) / increaseStock(qty)` — invariante de estoque (`>= 0`).
@@ -341,8 +343,11 @@ flowchart TB
 4. **Placa Única:** não é possível cadastrar dois veículos com a mesma placa.
 5. **Associação Veículo-Cliente:** um veículo só entra numa OS se pertencer ao cliente identificado pelo CPF/CNPJ.
 6. **Edição de OS:** peças e serviços só podem ser adicionados/removidos em status `RECEIVED` ou `IN_DIAGNOSIS`.
-7. **Orçamento Automático:** o `totalCost` é recalculado a cada inclusão/remoção e na transição para `AWAITING_APPROVAL`.
-8. **Preço Congelado:** o preço unitário de peças e o preço de serviços são gravados na linha no momento da inclusão (não mudam se o catálogo for atualizado depois).
+7. **Orçamento Automático:** o `totalCost` é recalculado a cada inclusão/remoção e na transição para
+   `AWAITING_APPROVAL`.
+8. **Preço Congelado:** o preço unitário de peças e o preço de serviços são gravados na linha no momento da inclusão (
+   não mudam se o catálogo for atualizado depois).
 9. **Serviço/Peça Inativo:** itens `active = false` não podem ser adicionados a novas OS.
 10. **Cancelamento:** uma OS `DELIVERED` não pode ser cancelada.
-11. **Referência por Identidade:** o aggregate `WorkOrder` referencia os demais aggregates por id (+ snapshot), nunca por referência direta à entidade de persistência.
+11. **Referência por Identidade:** o aggregate `WorkOrder` referencia os demais aggregates por id (+ snapshot), nunca
+    por referência direta à entidade de persistência.

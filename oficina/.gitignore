@@ -9,3 +9,12 @@ keys/
 # Nunca commitar chaves privadas!
 keys/privateKey.pem
 keys/publicKey.pem
+
+# Terraform (infra/) — state fica em S3, nada disso deve ser commitado
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfvars
+infra/tfplan
+infra/*.pem
+infra/kubeconfig
