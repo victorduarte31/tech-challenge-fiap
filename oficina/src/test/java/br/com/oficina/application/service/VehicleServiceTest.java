@@ -7,8 +7,8 @@ import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Client;
 import br.com.oficina.domain.model.ClientType;
 import br.com.oficina.domain.model.Vehicle;
-import br.com.oficina.infrastructure.repository.ClientRepository;
-import br.com.oficina.infrastructure.repository.VehicleRepository;
+import br.com.oficina.domain.ports.out.ClientRepositoryPort;
+import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,8 +26,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class VehicleServiceTest {
 
-    @Mock VehicleRepository vehicleRepository;
-    @Mock ClientRepository clientRepository;
+    @Mock VehicleRepositoryPort vehicleRepository;
+    @Mock ClientRepositoryPort clientRepository;
 
     @InjectMocks
     VehicleService vehicleService;
@@ -40,7 +40,7 @@ class VehicleServiceTest {
         client = new Client("João", "11144477735", ClientType.PF, null, null);
         DomainTestFixtures.setId(client, 1L);
 
-        vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, client);
+        vehicle = new Vehicle("ABC1234", "Toyota", "Corolla", 2020, 1L);
         DomainTestFixtures.setId(vehicle, 1L);
         DomainTestFixtures.setField(vehicle, "createdAt", LocalDateTime.now());
         DomainTestFixtures.setField(vehicle, "updatedAt", LocalDateTime.now());
@@ -58,7 +58,7 @@ class VehicleServiceTest {
 
     @Test
     void findById_whenExists_shouldReturn() {
-        when(vehicleRepository.findByIdOptional(1L)).thenReturn(Optional.of(vehicle));
+        when(vehicleRepository.fetchById(1L)).thenReturn(Optional.of(vehicle));
 
         VehicleResponseDto result = vehicleService.findById(1L);
 
@@ -67,7 +67,7 @@ class VehicleServiceTest {
 
     @Test
     void findById_whenNotFound_shouldThrow() {
-        when(vehicleRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(vehicleRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> vehicleService.findById(99L))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -85,15 +85,15 @@ class VehicleServiceTest {
     @Test
     void create_withNewPlate_shouldPersistAndReturn() {
         when(vehicleRepository.existsByLicensePlate("ABC1234")).thenReturn(false);
-        when(clientRepository.findByIdOptional(1L)).thenReturn(Optional.of(client));
-        doNothing().when(vehicleRepository).persist(any(Vehicle.class));
+        when(clientRepository.fetchById(1L)).thenReturn(Optional.of(client));
+        when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(inv -> inv.getArgument(0));
 
         VehicleRequestDto dto = new VehicleRequestDto("ABC-1234", "Toyota", "Corolla", 2020, 1L);
 
         VehicleResponseDto result = vehicleService.create(dto);
 
         assertThat(result.brand()).isEqualTo("Toyota");
-        verify(vehicleRepository).persist(any(Vehicle.class));
+        verify(vehicleRepository).save(any(Vehicle.class));
     }
 
     @Test
@@ -110,7 +110,7 @@ class VehicleServiceTest {
     @Test
     void create_withUnknownClient_shouldThrowNotFoundException() {
         when(vehicleRepository.existsByLicensePlate("ABC1234")).thenReturn(false);
-        when(clientRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(clientRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         VehicleRequestDto dto = new VehicleRequestDto("ABC-1234", "Toyota", "Corolla", 2020, 99L);
 
@@ -120,10 +120,9 @@ class VehicleServiceTest {
 
     @Test
     void delete_whenExists_shouldDelete() {
-        when(vehicleRepository.findByIdOptional(1L)).thenReturn(Optional.of(vehicle));
-        doNothing().when(vehicleRepository).delete(vehicle);
+        when(vehicleRepository.fetchById(1L)).thenReturn(Optional.of(vehicle));
 
         assertThatCode(() -> vehicleService.delete(1L)).doesNotThrowAnyException();
-        verify(vehicleRepository).delete(vehicle);
+        verify(vehicleRepository).removeById(1L);
     }
 }

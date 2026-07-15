@@ -3,7 +3,8 @@ package br.com.oficina.interfaces.rest;
 import br.com.oficina.application.dto.PublicApprovalRequestDto;
 import br.com.oficina.application.dto.PublicWorkOrderDto;
 import br.com.oficina.application.dto.PublicWorkOrderStatusDto;
-import br.com.oficina.application.service.WorkOrderService;
+import br.com.oficina.application.ports.in.ApproveBudgetUseCase;
+import br.com.oficina.application.ports.in.ListWorkOrdersUseCase;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -18,10 +19,12 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Tag(name = "Acompanhamento Público", description = "Endpoint público para clientes acompanharem o status da OS")
 public class PublicTrackingResource {
 
-    WorkOrderService workOrderService;
+    private final ListWorkOrdersUseCase listWorkOrders;
+    private final ApproveBudgetUseCase approveBudget;
 
-    public PublicTrackingResource(WorkOrderService workOrderService) {
-        this.workOrderService = workOrderService;
+    public PublicTrackingResource(ListWorkOrdersUseCase listWorkOrders, ApproveBudgetUseCase approveBudget) {
+        this.listWorkOrders = listWorkOrders;
+        this.approveBudget = approveBudget;
     }
 
     @GET
@@ -33,7 +36,7 @@ public class PublicTrackingResource {
                       "placa, orçamento ou itens (evita vazamento por enumeração do número da OS)."
     )
     public PublicWorkOrderStatusDto getStatus(@PathParam("orderNumber") String orderNumber) {
-        return PublicWorkOrderStatusDto.from(workOrderService.findByOrderNumber(orderNumber));
+        return PublicWorkOrderStatusDto.from(listWorkOrders.findByOrderNumber(orderNumber));
     }
 
     @POST
@@ -47,7 +50,7 @@ public class PublicTrackingResource {
     public PublicWorkOrderDto approve(@PathParam("orderNumber") String orderNumber,
                                       @Valid @NotNull(message = "Corpo da requisição é obrigatório") PublicApprovalRequestDto request) {
         return PublicWorkOrderDto.from(
-            workOrderService.approveByOrderNumber(orderNumber, request.clientCpfCnpj())
+            approveBudget.approveByOrderNumber(orderNumber, request.clientCpfCnpj())
         );
     }
 
@@ -62,7 +65,7 @@ public class PublicTrackingResource {
     public PublicWorkOrderDto reject(@PathParam("orderNumber") String orderNumber,
                                      @Valid @NotNull(message = "Corpo da requisição é obrigatório") PublicApprovalRequestDto request) {
         return PublicWorkOrderDto.from(
-            workOrderService.rejectByOrderNumber(orderNumber, request.clientCpfCnpj())
+            approveBudget.rejectByOrderNumber(orderNumber, request.clientCpfCnpj())
         );
     }
 }

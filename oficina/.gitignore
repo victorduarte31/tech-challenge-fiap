@@ -9,3 +9,14 @@ keys/
 # Nunca commitar chaves privadas!
 keys/privateKey.pem
 keys/publicKey.pem
+
+# Terraform — state fica em S3, nada disso deve ser commitado.
+# Regras amplas (**/) pegam state solto em qualquer diretório, não só infra/ — um
+# terraform.tfstate gerado fora de infra/ já vazou uma vez para untracked.
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/tfplan
+infra/.terraform/
+infra/*.pem
+infra/kubeconfig

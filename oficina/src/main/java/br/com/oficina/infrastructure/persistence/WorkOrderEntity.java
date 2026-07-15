@@ -1,7 +1,5 @@
 package br.com.oficina.infrastructure.persistence;
 
-import br.com.oficina.domain.model.Client;
-import br.com.oficina.domain.model.Vehicle;
 import br.com.oficina.domain.model.WorkOrderStatus;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
@@ -12,7 +10,7 @@ import java.util.List;
 /**
  * Entidade de persistência da OS. Mapeia a tabela {@code work_orders} e isola o
  * JPA do aggregate de domínio {@code WorkOrder}. Mantém FK para os supporting
- * domains ({@code Client}/{@code Vehicle}), que permanecem entidades JPA.
+ * domains ({@code ClientEntity}/{@code VehicleEntity}).
  */
 @Entity
 @Table(name = "work_orders")
@@ -27,11 +25,11 @@ public class WorkOrderEntity {
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "client_id", nullable = false)
-    private Client client;
+    private ClientEntity client;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "vehicle_id", nullable = false)
-    private Vehicle vehicle;
+    private VehicleEntity vehicle;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 25)
@@ -95,11 +93,11 @@ public class WorkOrderEntity {
     public String getOrderNumber() { return orderNumber; }
     public void setOrderNumber(String orderNumber) { this.orderNumber = orderNumber; }
 
-    public Client getClient() { return client; }
-    public void setClient(Client client) { this.client = client; }
+    public ClientEntity getClient() { return client; }
+    public void setClient(ClientEntity client) { this.client = client; }
 
-    public Vehicle getVehicle() { return vehicle; }
-    public void setVehicle(Vehicle vehicle) { this.vehicle = vehicle; }
+    public VehicleEntity getVehicle() { return vehicle; }
+    public void setVehicle(VehicleEntity vehicle) { this.vehicle = vehicle; }
 
     public WorkOrderStatus getStatus() { return status; }
     public void setStatus(WorkOrderStatus status) { this.status = status; }

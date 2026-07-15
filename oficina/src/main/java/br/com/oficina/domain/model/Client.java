@@ -1,46 +1,22 @@
 package br.com.oficina.domain.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
-@Entity
-@Table(name = "clients")
+/**
+ * Cliente da oficina — modelo de domínio puro, sem dependência de framework de
+ * persistência. A tradução para a tabela {@code clients} é feita pelo
+ * {@code ClientEntity}/{@code ClientMapper} na camada de infraestrutura.
+ */
 public class Client {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false)
     private String name;
-
-    @Column(name = "cpf_cnpj", nullable = false, unique = true, length = 14)
     private String cpfCnpj;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "client_type", nullable = false, length = 2)
     private ClientType clientType;
-
-    @Column(length = 100)
     private String email;
-
-    @Column(length = 20)
     private String phone;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    @OneToMany(mappedBy = "client", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private final List<Vehicle> vehicles = new ArrayList<>();
-
-    protected Client() {
-        // Required by JPA
-    }
 
     public Client(String name, String cpfCnpj, ClientType clientType, String email, String phone) {
         this.name = name;
@@ -50,15 +26,23 @@ public class Client {
         this.phone = phone;
     }
 
-    @PrePersist
-    void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    private Client() {
+        // Reconstrução via rehydrate().
     }
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = LocalDateTime.now();
+    /** Reconstrói o cliente a partir da persistência (uso exclusivo do mapper). */
+    public static Client rehydrate(Long id, String name, String cpfCnpj, ClientType clientType,
+                                   String email, String phone, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        Client c = new Client();
+        c.id = id;
+        c.name = name;
+        c.cpfCnpj = cpfCnpj;
+        c.clientType = clientType;
+        c.email = email;
+        c.phone = phone;
+        c.createdAt = createdAt;
+        c.updatedAt = updatedAt;
+        return c;
     }
 
     public void update(String name, String cpfCnpj, ClientType clientType, String email, String phone) {
@@ -77,5 +61,4 @@ public class Client {
     public String getPhone() { return phone; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public List<Vehicle> getVehicles() { return vehicles; }
 }

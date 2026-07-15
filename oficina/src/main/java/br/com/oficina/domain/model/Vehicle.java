@@ -1,67 +1,61 @@
 package br.com.oficina.domain.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "vehicles")
+/**
+ * Veículo da oficina — modelo de domínio puro, sem dependência de framework de
+ * persistência. Referencia o cliente proprietário por identidade ({@code clientId}),
+ * mantendo o nome ({@code clientName}) como projeção de leitura para exibição.
+ * A tradução para a tabela {@code vehicles} é feita pelo
+ * {@code VehicleEntity}/{@code VehicleMapper} na camada de infraestrutura.
+ */
 public class Vehicle {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(name = "license_plate", nullable = false, unique = true, length = 10)
     private String licensePlate;
-
-    @Column(nullable = false, length = 50)
     private String brand;
-
-    @Column(nullable = false, length = 80)
     private String model;
-
-    @Column(name = "production_year", nullable = false)
     private Integer productionYear;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "client_id", nullable = false)
-    private Client client;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
+    private Long clientId;
+    private String clientName;
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    protected Vehicle() {
-        // Required by JPA
-    }
-
-    public Vehicle(String licensePlate, String brand, String model, Integer productionYear, Client client) {
+    public Vehicle(String licensePlate, String brand, String model, Integer productionYear, Long clientId) {
         this.licensePlate = licensePlate;
         this.brand = brand;
         this.model = model;
         this.productionYear = productionYear;
-        this.client = client;
+        this.clientId = clientId;
     }
 
-    @PrePersist
-    void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    private Vehicle() {
+        // Reconstrução via rehydrate().
     }
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = LocalDateTime.now();
+    /** Reconstrói o veículo a partir da persistência (uso exclusivo do mapper). */
+    public static Vehicle rehydrate(Long id, String licensePlate, String brand, String model,
+                                    Integer productionYear, Long clientId, String clientName,
+                                    LocalDateTime createdAt, LocalDateTime updatedAt) {
+        Vehicle v = new Vehicle();
+        v.id = id;
+        v.licensePlate = licensePlate;
+        v.brand = brand;
+        v.model = model;
+        v.productionYear = productionYear;
+        v.clientId = clientId;
+        v.clientName = clientName;
+        v.createdAt = createdAt;
+        v.updatedAt = updatedAt;
+        return v;
     }
 
-    public void update(String licensePlate, String brand, String model, Integer productionYear, Client client) {
+    public void update(String licensePlate, String brand, String model, Integer productionYear, Long clientId) {
         this.licensePlate = licensePlate;
         this.brand = brand;
         this.model = model;
         this.productionYear = productionYear;
-        this.client = client;
+        this.clientId = clientId;
     }
 
     public Long getId() { return id; }
@@ -69,7 +63,8 @@ public class Vehicle {
     public String getBrand() { return brand; }
     public String getModel() { return model; }
     public Integer getProductionYear() { return productionYear; }
-    public Client getClient() { return client; }
+    public Long getClientId() { return clientId; }
+    public String getClientName() { return clientName; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

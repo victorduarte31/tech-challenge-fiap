@@ -6,7 +6,7 @@ import br.com.oficina.application.dto.PartResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
-import br.com.oficina.infrastructure.repository.PartRepository;
+import br.com.oficina.domain.ports.out.PartRepositoryPort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -15,9 +15,9 @@ import java.util.List;
 public class PartService {
 
     public static final String PECA_INSUMO = "Peça/Insumo";
-    PartRepository partRepository;
+    PartRepositoryPort partRepository;
 
-    public PartService(PartRepository partRepository) {
+    public PartService(PartRepositoryPort partRepository) {
         this.partRepository = partRepository;
     }
 
@@ -28,7 +28,7 @@ public class PartService {
     }
 
     public PartResponseDto findById(Long id) {
-        Part part = partRepository.findByIdOptional(id)
+        Part part = partRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
         return PartResponseDto.from(part);
     }
@@ -43,17 +43,16 @@ public class PartService {
     public PartResponseDto create(PartRequestDto dto) {
         Part part = new Part(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit(),
             dto.minimumStock(), dto.partType());
-        partRepository.persist(part);
-        return PartResponseDto.from(part);
+        return PartResponseDto.from(partRepository.save(part));
     }
 
     @Transactional
     public PartResponseDto update(Long id, PartRequestDto dto) {
-        Part part = partRepository.findByIdOptional(id)
+        Part part = partRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
         part.update(dto.name(), dto.description(), dto.unitPrice(), dto.stockQuantity(), dto.unit(),
             dto.minimumStock(), dto.partType());
-        return PartResponseDto.from(part);
+        return PartResponseDto.from(partRepository.save(part));
     }
 
     @Transactional
@@ -61,14 +60,14 @@ public class PartService {
         if (adjustment == 0) {
             throw new BusinessException("O ajuste de estoque não pode ser zero");
         }
-        Part part = partRepository.findByIdOptional(id)
+        Part part = partRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
         if (adjustment > 0) {
             part.increaseStock(adjustment);
         } else {
             part.decreaseStock(Math.abs(adjustment));
         }
-        return PartResponseDto.from(part);
+        return PartResponseDto.from(partRepository.save(part));
     }
 
     /**
@@ -77,9 +76,10 @@ public class PartService {
      */
     @Transactional
     public void delete(Long id) {
-        Part part = partRepository.findByIdOptional(id)
+        Part part = partRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
         part.deactivate();
+        partRepository.save(part);
     }
 
     /**
@@ -88,9 +88,9 @@ public class PartService {
      */
     @Transactional
     public PartResponseDto reactivate(Long id) {
-        Part part = partRepository.findByIdOptional(id)
+        Part part = partRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PECA_INSUMO, id));
         part.activate();
-        return PartResponseDto.from(part);
+        return PartResponseDto.from(partRepository.save(part));
     }
 }

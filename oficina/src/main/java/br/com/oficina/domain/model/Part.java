@@ -1,56 +1,28 @@
 package br.com.oficina.domain.model;
 
 import br.com.oficina.domain.exception.BusinessException;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "parts")
+/**
+ * Peça ou insumo com controle de estoque — modelo de domínio puro, sem dependência
+ * de framework de persistência. O controle de concorrência otimista ({@code version})
+ * é refletido na persistência pelo {@code PartEntity} (campo {@code @Version}).
+ */
 public class Part {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, length = 100)
     private String name;
-
-    @Column
     private String description;
-
-    @Column(name = "unit_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal unitPrice;
-
-    @Column(name = "stock_quantity", nullable = false)
     private Integer stockQuantity;
-
-    @Column(nullable = false, length = 10)
     private String unit;
-
-    @Column(name = "minimum_stock", nullable = false)
     private Integer minimumStock = 0;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "part_type", nullable = false, length = 10)
     private PartType partType = PartType.PECA;
-
-    @Column(nullable = false)
     private Boolean active = true;
-
-    @Version
-    @Column(nullable = false)
     private Long version;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
-    protected Part() {
-        // Required by JPA
-    }
 
     public Part(String name, String description, BigDecimal unitPrice, Integer stockQuantity, String unit) {
         this(name, description, unitPrice, stockQuantity, unit, 0, PartType.PECA);
@@ -67,15 +39,28 @@ public class Part {
         this.partType = partType != null ? partType : PartType.PECA;
     }
 
-    @PrePersist
-    void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+    private Part() {
+        // Reconstrução via rehydrate().
     }
 
-    @PreUpdate
-    void preUpdate() {
-        updatedAt = LocalDateTime.now();
+    /** Reconstrói a peça a partir da persistência (uso exclusivo do mapper). */
+    public static Part rehydrate(Long id, String name, String description, BigDecimal unitPrice,
+                                 Integer stockQuantity, String unit, Integer minimumStock, PartType partType,
+                                 Boolean active, Long version, LocalDateTime createdAt, LocalDateTime updatedAt) {
+        Part p = new Part();
+        p.id = id;
+        p.name = name;
+        p.description = description;
+        p.unitPrice = unitPrice;
+        p.stockQuantity = stockQuantity;
+        p.unit = unit;
+        p.minimumStock = minimumStock != null ? minimumStock : 0;
+        p.partType = partType != null ? partType : PartType.PECA;
+        p.active = active;
+        p.version = version;
+        p.createdAt = createdAt;
+        p.updatedAt = updatedAt;
+        return p;
     }
 
     public void update(String name, String description, BigDecimal unitPrice, Integer stockQuantity, String unit,
@@ -130,6 +115,7 @@ public class Part {
     public Integer getMinimumStock() { return minimumStock; }
     public PartType getPartType() { return partType; }
     public Boolean getActive() { return active; }
+    public Long getVersion() { return version; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

@@ -6,6 +6,7 @@
 ## Sobre o Sistema
 
 Sistema integrado de atendimento e execução de serviços para oficina mecânica, com foco em:
+
 - Gestão de Ordens de Serviço (OS) com máquina de estados
 - CRUD de clientes, veículos, peças e serviços
 - Acompanhamento público de OS pelo cliente
@@ -14,12 +15,12 @@ Sistema integrado de atendimento e execução de serviços para oficina mecânic
 
 ## Requisitos
 
-| Ferramenta | Versão mínima |
-|-----------|--------------|
-| Java      | 21+          |
-| Maven     | 3.9+         |
-| Docker    | 24+          |
-| Docker Compose | 2.0+   |
+| Ferramenta     | Versão mínima |
+|----------------|---------------|
+| Java           | 21+           |
+| Maven          | 3.9+          |
+| Docker         | 24+           |
+| Docker Compose | 2.0+          |
 
 ## Como Executar
 
@@ -42,7 +43,9 @@ docker-compose down
 
 A aplicação estará disponível em `http://localhost:8080`
 
-> **Nota:** Na primeira execução, o container gera automaticamente o par de chaves RSA para JWT. O volume `oficina_jwt_keys` persiste as chaves entre reinicializações.
+> **Nota:** Na primeira execução, o container gera automaticamente o par de chaves RSA para JWT. O volume
+`oficina_jwt_keys` persiste as chaves entre reinicializações.
+
 ### Opção 2 — Desenvolvimento Local
 
 ```bash
@@ -86,10 +89,10 @@ Após subir a aplicação, acesse:
 
 Em **dev** (via `docker-compose.yml`) os seguintes usuários são criados na primeira execução:
 
-| Usuário    | Senha (dev)  | Papel     | Permissões                                                    |
-|------------|--------------|-----------|--------------------------------------------------------------|
-| admin      | admin123     | ADMIN     | Dono — acesso total                                          |
-| atendente  | atendente123 | ATTENDANT | Cadastros (criar/editar) e operação de OS; **sem** exclusão, métricas, ajuste de estoque/cancelamento diretos (usa solicitações) |
+| Usuário   | Senha (dev)  | Papel     | Permissões                                                                                                                       |
+|-----------|--------------|-----------|----------------------------------------------------------------------------------------------------------------------------------|
+| admin     | admin123     | ADMIN     | Dono — acesso total                                                                                                              |
+| atendente | atendente123 | ATTENDANT | Cadastros (criar/editar) e operação de OS; **sem** exclusão, métricas, ajuste de estoque/cancelamento diretos (usa solicitações) |
 
 > O perfil **MECHANIC** foi descontinuado (o mecânico não acessa o sistema). A migração
 > `V5__remove_legacy_mechanic_users.sql` remove usuários legados com esse papel.
@@ -127,26 +130,26 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → FINISHED �
                                  CANCELLED
 ```
 
-| Ação                          | Endpoint                                                | Papel          |
-|-------------------------------|---------------------------------------------------------|----------------|
-| Criar OS                      | `POST /admin/work-orders`                               | ADMIN/ATTENDANT |
-| Iniciar diagnóstico           | `PATCH /admin/work-orders/{id}/start-diagnosis`         | ADMIN/ATTENDANT |
-| Enviar orçamento              | `PATCH /admin/work-orders/{id}/send-for-approval`       | ADMIN/ATTENDANT |
-| Cliente aprova (remoto)       | `POST /public/work-orders/{orderNumber}/approve`        | Público (¹)    |
-| Cliente rejeita (remoto)      | `POST /public/work-orders/{orderNumber}/reject`         | Público (¹)    |
-| Aprovar (registro presencial) | `PATCH /admin/work-orders/{id}/approve`                 | ADMIN/ATTENDANT |
-| Rejeitar (registro presencial)| `PATCH /admin/work-orders/{id}/reject`                  | ADMIN/ATTENDANT |
-| Concluir execução             | `PATCH /admin/work-orders/{id}/complete`                | ADMIN/ATTENDANT |
-| Registrar entrega             | `PATCH /admin/work-orders/{id}/deliver`                 | ADMIN/ATTENDANT |
-| Cancelar                      | `PATCH /admin/work-orders/{id}/cancel`                  | ADMIN          |
+| Ação                           | Endpoint                                          | Papel           |
+|--------------------------------|---------------------------------------------------|-----------------|
+| Criar OS                       | `POST /admin/work-orders`                         | ADMIN/ATTENDANT |
+| Iniciar diagnóstico            | `PATCH /admin/work-orders/{id}/start-diagnosis`   | ADMIN/ATTENDANT |
+| Enviar orçamento               | `PATCH /admin/work-orders/{id}/send-for-approval` | ADMIN/ATTENDANT |
+| Cliente aprova (remoto)        | `POST /public/work-orders/{orderNumber}/approve`  | Público (¹)     |
+| Cliente rejeita (remoto)       | `POST /public/work-orders/{orderNumber}/reject`   | Público (¹)     |
+| Aprovar (registro presencial)  | `PATCH /admin/work-orders/{id}/approve`           | ADMIN/ATTENDANT |
+| Rejeitar (registro presencial) | `PATCH /admin/work-orders/{id}/reject`            | ADMIN/ATTENDANT |
+| Concluir execução              | `PATCH /admin/work-orders/{id}/complete`          | ADMIN/ATTENDANT |
+| Registrar entrega              | `PATCH /admin/work-orders/{id}/deliver`           | ADMIN/ATTENDANT |
+| Cancelar                       | `PATCH /admin/work-orders/{id}/cancel`            | ADMIN           |
 
 > (¹) **Approve/Reject — dois canais distintos**
 > - **Canal público** (`/public/work-orders/{orderNumber}/approve|reject`): destinado ao
->   próprio cliente aprovar/rejeitar remotamente seu orçamento. Exige o número da OS e
->   prova de identidade (CPF/CNPJ) no corpo da requisição.
+    > próprio cliente aprovar/rejeitar remotamente seu orçamento. Exige o número da OS e
+    > prova de identidade (CPF/CNPJ) no corpo da requisição.
 > - **Canal administrativo** (`/admin/work-orders/{id}/approve|reject`): destinado ao
->   atendente registrar uma aprovação/rejeição feita **presencialmente ou por telefone**
->   pelo cliente. Mantém auditoria via JWT do operador (ADMIN/ATTENDANT).
+    > atendente registrar uma aprovação/rejeição feita **presencialmente ou por telefone**
+    > pelo cliente. Mantém auditoria via JWT do operador (ADMIN/ATTENDANT).
 
 ## Solicitações (fluxo de aprovação — maker-checker)
 
@@ -155,27 +158,27 @@ Operações sensíveis têm execução direta restrita ao **dono** (ADMIN). A **
 o dono aprova (executando a operação) ou rejeita. Tudo auditado (solicitante, motivo,
 quem decidiu).
 
-| Ação                                   | Endpoint                                   | Papel            |
-|----------------------------------------|--------------------------------------------|------------------|
-| Solicitar ajuste de estoque            | `POST /admin/requests/stock-adjustment`    | ADMIN/ATTENDANT  |
-| Solicitar cancelamento de OS           | `POST /admin/requests/cancellation`        | ADMIN/ATTENDANT  |
-| Listar solicitações (filtro `?status`) | `GET /admin/requests`                      | ADMIN            |
-| Contagem de pendentes                  | `GET /admin/requests/pending-count`        | ADMIN            |
-| Aprovar (executa a operação)           | `POST /admin/requests/{id}/approve`        | ADMIN            |
-| Rejeitar                               | `POST /admin/requests/{id}/reject`         | ADMIN            |
-| Ajustar estoque **direto**             | `PATCH /admin/parts/{id}/stock`            | ADMIN            |
-| Cancelar OS **direto**                 | `PATCH /admin/work-orders/{id}/cancel`     | ADMIN            |
+| Ação                                   | Endpoint                                | Papel           |
+|----------------------------------------|-----------------------------------------|-----------------|
+| Solicitar ajuste de estoque            | `POST /admin/requests/stock-adjustment` | ADMIN/ATTENDANT |
+| Solicitar cancelamento de OS           | `POST /admin/requests/cancellation`     | ADMIN/ATTENDANT |
+| Listar solicitações (filtro `?status`) | `GET /admin/requests`                   | ADMIN           |
+| Contagem de pendentes                  | `GET /admin/requests/pending-count`     | ADMIN           |
+| Aprovar (executa a operação)           | `POST /admin/requests/{id}/approve`     | ADMIN           |
+| Rejeitar                               | `POST /admin/requests/{id}/reject`      | ADMIN           |
+| Ajustar estoque **direto**             | `PATCH /admin/parts/{id}/stock`         | ADMIN           |
+| Cancelar OS **direto**                 | `PATCH /admin/work-orders/{id}/cancel`  | ADMIN           |
 
 > Na aprovação, a operação real roda na mesma transação; se falhar (estoque
 > insuficiente, OS já cancelada), há rollback e a solicitação permanece `PENDING`.
 
 ## Endpoints Públicos (sem autenticação)
 
-| Método | Endpoint                                          | Descrição                          |
-|--------|---------------------------------------------------|------------------------------------|
-| GET    | `/public/work-orders/{orderNumber}/status`        | Consultar status da OS             |
-| POST   | `/public/work-orders/{orderNumber}/approve`       | Aprovar orçamento (exige CPF/CNPJ) |
-| POST   | `/public/work-orders/{orderNumber}/reject`        | Rejeitar orçamento (exige CPF/CNPJ)|
+| Método | Endpoint                                    | Descrição                           |
+|--------|---------------------------------------------|-------------------------------------|
+| GET    | `/public/work-orders/{orderNumber}/status`  | Consultar status da OS              |
+| POST   | `/public/work-orders/{orderNumber}/approve` | Aprovar orçamento (exige CPF/CNPJ)  |
+| POST   | `/public/work-orders/{orderNumber}/reject`  | Rejeitar orçamento (exige CPF/CNPJ) |
 
 > **Aprovação/rejeição pública — exigência de identidade**
 > Os endpoints `approve`/`reject` exigem o CPF/CNPJ do cliente no corpo da requisição.
@@ -226,6 +229,7 @@ src/main/java/br/com/oficina/
 ## Banco de Dados
 
 **PostgreSQL** foi escolhido pelos seguintes motivos:
+
 - Suporte nativo a tipos avançados (JSONB, arrays)
 - ACID compliance robusto para operações transacionais
 - Excelente performance em queries complexas com JOIN
@@ -236,21 +240,21 @@ As migrations são gerenciadas pelo **Flyway** (`src/main/resources/db/migration
 
 ## Variáveis de Ambiente
 
-| Variável                     | Padrão              | Descrição                                   |
-|------------------------------|---------------------|---------------------------------------------|
-| DB_HOST                      | localhost           | Host do PostgreSQL                          |
-| DB_PORT                      | 5432                | Porta do PostgreSQL                         |
-| DB_NAME                      | oficina_db          | Nome do banco                               |
-| DB_USERNAME                  | postgres            | Usuário do banco                            |
-| DB_PASSWORD                  | postgres            | Senha do banco                              |
-| JWT_ISSUER                   | oficina-api         | Issuer do JWT                               |
-| JWT_EXPIRATION_HOURS         | 8                   | Validade do token JWT (horas)               |
-| JWT_PRIVATE_KEY_LOCATION     | keys/privateKey.pem | Caminho da chave privada RSA                |
-| JWT_PUBLIC_KEY_LOCATION      | keys/publicKey.pem  | Caminho da chave pública RSA                |
-| CORS_ALLOWED_ORIGINS         | localhost:3000,8080 | Lista de origens permitidas (CSV)           |
-| APP_SEED_ENABLED             | true                | Se cria usuários iniciais (desabilite após) |
-| APP_SEED_ADMIN_PASSWORD      | _gerada_            | Senha do admin (dono); vazia → senha aleatória |
-| APP_SEED_ATTENDANT_PASSWORD  | _gerada_            | Senha da atendente; vazia → senha aleatória  |
+| Variável                    | Padrão              | Descrição                                      |
+|-----------------------------|---------------------|------------------------------------------------|
+| DB_HOST                     | localhost           | Host do PostgreSQL                             |
+| DB_PORT                     | 5432                | Porta do PostgreSQL                            |
+| DB_NAME                     | oficina_db          | Nome do banco                                  |
+| DB_USERNAME                 | postgres            | Usuário do banco                               |
+| DB_PASSWORD                 | postgres            | Senha do banco                                 |
+| JWT_ISSUER                  | oficina-api         | Issuer do JWT                                  |
+| JWT_EXPIRATION_HOURS        | 8                   | Validade do token JWT (horas)                  |
+| JWT_PRIVATE_KEY_LOCATION    | keys/privateKey.pem | Caminho da chave privada RSA                   |
+| JWT_PUBLIC_KEY_LOCATION     | keys/publicKey.pem  | Caminho da chave pública RSA                   |
+| CORS_ALLOWED_ORIGINS        | localhost:3000,8080 | Lista de origens permitidas (CSV)              |
+| APP_SEED_ENABLED            | true                | Se cria usuários iniciais (desabilite após)    |
+| APP_SEED_ADMIN_PASSWORD     | _gerada_            | Senha do admin (dono); vazia → senha aleatória |
+| APP_SEED_ATTENDANT_PASSWORD | _gerada_            | Senha da atendente; vazia → senha aleatória    |
 
 ## Health Check
 
@@ -284,22 +288,22 @@ curl http://localhost:8080/q/health
 
 ## Tecnologias
 
-| Tecnologia           | Versão    | Finalidade                    |
-|---------------------|-----------|-------------------------------|
-| Java                | 21 LTS    | Linguagem                     |
-| Quarkus             | 3.15.7    | Framework (fast startup, GraalVM-ready) |
-| Maven               | 3.9+      | Gerenciador de dependências    |
-| PostgreSQL          | 16        | Banco de dados principal       |
-| Hibernate ORM Panache | 3.15.7  | ORM com padrão Repository      |
-| Flyway              | —         | Migrations de banco de dados   |
-| SmallRye JWT        | —         | Autenticação JWT (RSA-256)     |
-| SmallRye OpenAPI    | —         | Documentação Swagger           |
-| Hibernate Validator | —         | Validação de beans             |
-| H2                  | —         | Banco em memória para testes   |
-| JUnit 5             | —         | Testes unitários               |
-| Mockito             | —         | Mocking para testes unitários  |
-| REST-Assured        | —         | Testes de integração REST      |
-| JaCoCo              | 0.8.13    | Cobertura de código            |
+| Tecnologia            | Versão | Finalidade                              |
+|-----------------------|--------|-----------------------------------------|
+| Java                  | 21 LTS | Linguagem                               |
+| Quarkus               | 3.15.7 | Framework (fast startup, GraalVM-ready) |
+| Maven                 | 3.9+   | Gerenciador de dependências             |
+| PostgreSQL            | 16     | Banco de dados principal                |
+| Hibernate ORM Panache | 3.15.7 | ORM com padrão Repository               |
+| Flyway                | —      | Migrations de banco de dados            |
+| SmallRye JWT          | —      | Autenticação JWT (RSA-256)              |
+| SmallRye OpenAPI      | —      | Documentação Swagger                    |
+| Hibernate Validator   | —      | Validação de beans                      |
+| H2                    | —      | Banco em memória para testes            |
+| JUnit 5               | —      | Testes unitários                        |
+| Mockito               | —      | Mocking para testes unitários           |
+| REST-Assured          | —      | Testes de integração REST               |
+| JaCoCo                | 0.8.13 | Cobertura de código                     |
 
 ---
 
@@ -338,9 +342,9 @@ infraestrutura.
 
 ### Endpoints novos/ajustados (`/admin/parts`)
 
-| Método | Caminho | Descrição |
-|--------|---------|-----------|
-| GET | `/admin/parts/low-stock` | Lista peças/insumos com estoque ≤ mínimo (alerta de reposição) |
+| Método   | Caminho                    | Descrição                                                           |
+|----------|----------------------------|---------------------------------------------------------------------|
+| GET      | `/admin/parts/low-stock`   | Lista peças/insumos com estoque ≤ mínimo (alerta de reposição)      |
 | POST/PUT | `/admin/parts` (e `/{id}`) | Campos novos opcionais: `minimumStock`, `partType` (default `PECA`) |
 
 Os DTOs `PartRequestDto`/`PartResponseDto` incluem `minimumStock`, `partType` e `lowStock`.
@@ -352,12 +356,36 @@ A documentação DDD foi consolidada em [`docs/DDD.md`](docs/DDD.md) com diagram
 do core domain** (`WorkOrder` como POJO puro; persistência via `WorkOrderEntity` + `WorkOrderMapper`).
 O documento cobre:
 
-1. **Linguagem Ubíqua + glossário PT↔EN** (Recebida=RECEIVED, Orçamento=Budget/totalCost, Peça=Part, Insumo=Part(INSUMO), etc.).
-2. **Context Map** — core (OS), supporting (Clientes/Veículos, Catálogo/Estoque), generic (Segurança) e o canal de **Acompanhamento Público** (API do cliente).
-3. **Modelo de Domínio (classDiagram)** — aggregates, VOs (`CustomerSnapshot`/`VehicleSnapshot`), `minimumStock`/`partType` em `Part`, `getBudget()` em `WorkOrder`.
+1. **Linguagem Ubíqua + glossário PT↔EN** (Recebida=RECEIVED, Orçamento=Budget/totalCost, Peça=Part, Insumo=Part(
+   INSUMO), etc.).
+2. **Context Map** — core (OS), supporting (Clientes/Veículos, Catálogo/Estoque), generic (Segurança) e o canal de *
+   *Acompanhamento Público** (API do cliente).
+3. **Modelo de Domínio (classDiagram)** — aggregates, VOs (`CustomerSnapshot`/`VehicleSnapshot`), `minimumStock`/
+   `partType` em `Part`, `getBudget()` em `WorkOrder`.
 4. **Máquina de Estados** da OS (7 status).
 5. **Event Storming** — Fluxo da OS e Fluxo de Peças/Insumos (comando→evento→política), com estoque mínimo por peça.
 6. **Arquitetura em Camadas** — com `PostgreSQL`, `Swagger/OpenAPI` e o isolamento de persistência do domínio.
 
 > Reparos adicionais pós-aprovação foram considerados **fora do escopo deste MVP** (a máquina de
 > estados atual permite edição apenas em `RECEIVED`/`IN_DIAGNOSIS`).
+
+---
+
+## 🚧 Fase 2 — Em andamento
+
+Infraestrutura AWS (Terraform + k3s + RDS + ECR) provisionada e validada manualmente — ver
+[`infra/README.md`](infra/README.md) e [`SESSION-GUIDE.md`](SESSION-GUIDE.md) para o passo a passo de
+provisionamento/destruição a cada sessão do AWS Academy. Deploy Kubernetes validado (pods `Running`, health
+check `200 OK`) — ver [`k8s/README.md`](k8s/README.md).
+
+**Pendente:**
+
+- [ ] Teste de carga confirmando o HPA escalando (material do vídeo demonstrativo).
+- [ ] Pipeline de CI/CD (`.github/workflows/ci-cd.yml`) — ver `spec-github-actions.md`.
+- [ ] Esta seção do README ainda precisa do conteúdo final: descrição da solução, diagrama de arquitetura
+  (Mermaid), instruções reproduzíveis de execução local/deploy/Terraform, link da collection de API, link do
+  vídeo demonstrativo. Ver `spec.document.md` para o contrato completo.
+- [ ] Débito de teste da Fase 1 ainda em aberto (não é infraestrutura, é cobertura de código): teste de
+  resiliência de notificação (`notifySafely` em `WorkOrderService`) e testes de round-trip dos mappers
+  (`Client`/`Vehicle`/`Part`/`ServiceItem`) e do adapter de ordenação (`WorkOrderRepositoryAdapter.findActive`)
+  — ver `ready-to-go.md`, itens 1 e 5, e `spec-test-unit.md`.

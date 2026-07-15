@@ -1,0 +1,65 @@
+package br.com.oficina.infrastructure.adapters.out;
+
+import br.com.oficina.domain.exception.ResourceNotFoundException;
+import br.com.oficina.domain.model.ServiceItem;
+import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
+import br.com.oficina.infrastructure.persistence.ServiceItemEntity;
+import br.com.oficina.infrastructure.persistence.ServiceItemMapper;
+import io.quarkus.hibernate.orm.panache.PanacheRepository;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Adapter de persistência do aggregate {@code ServiceItem}. Opera sobre
+ * {@code ServiceItemEntity} via Panache e expõe à aplicação apenas o domínio puro,
+ * traduzido pelo {@link ServiceItemMapper}.
+ */
+@ApplicationScoped
+public class ServiceItemRepositoryAdapter implements ServiceItemRepositoryPort, PanacheRepository<ServiceItemEntity> {
+
+    @Inject
+    ServiceItemMapper mapper;
+
+    @Override
+    public List<ServiceItem> listAllItems() {
+        return listAll().stream()
+            .map(mapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    public List<ServiceItem> findAllActive() {
+        return list("active", true).stream()
+            .map(mapper::toDomain)
+            .toList();
+    }
+
+    @Override
+    public Optional<ServiceItem> fetchById(Long id) {
+        return findByIdOptional(id).map(mapper::toDomain);
+    }
+
+    @Override
+    public ServiceItem save(ServiceItem item) {
+        ServiceItemEntity entity;
+        if (item.getId() == null) {
+            entity = mapper.toNewEntity(item);
+            persist(entity);
+        } else {
+            entity = findById(item.getId());
+            if (entity == null) {
+                throw new ResourceNotFoundException("Serviço", item.getId());
+            }
+            mapper.applyState(entity, item);
+        }
+        flush();
+        return mapper.toDomain(entity);
+    }
+
+    @Override
+    public void removeById(Long id) {
+        deleteById(id);
+    }
+}

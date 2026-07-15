@@ -4,7 +4,7 @@ import br.com.oficina.application.dto.ServiceItemRequestDto;
 import br.com.oficina.application.dto.ServiceItemResponseDto;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.ServiceItem;
-import br.com.oficina.infrastructure.repository.ServiceItemRepository;
+import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 class ServiceItemServiceTest {
 
     @Mock
-    ServiceItemRepository serviceItemRepository;
+    ServiceItemRepositoryPort serviceItemRepository;
 
     @InjectMocks
     ServiceItemService serviceItemService;
@@ -42,7 +42,7 @@ class ServiceItemServiceTest {
 
     @Test
     void listAll_shouldReturnAll() {
-        when(serviceItemRepository.listAll()).thenReturn(List.of(sampleItem));
+        when(serviceItemRepository.listAllItems()).thenReturn(List.of(sampleItem));
 
         List<ServiceItemResponseDto> result = serviceItemService.listAll();
 
@@ -62,7 +62,7 @@ class ServiceItemServiceTest {
 
     @Test
     void findById_whenExists_shouldReturn() {
-        when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleItem));
+        when(serviceItemRepository.fetchById(1L)).thenReturn(Optional.of(sampleItem));
 
         ServiceItemResponseDto result = serviceItemService.findById(1L);
 
@@ -72,7 +72,7 @@ class ServiceItemServiceTest {
 
     @Test
     void findById_whenNotFound_shouldThrow() {
-        when(serviceItemRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(serviceItemRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> serviceItemService.findById(99L))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -80,7 +80,7 @@ class ServiceItemServiceTest {
 
     @Test
     void create_shouldPersistAndReturn() {
-        doNothing().when(serviceItemRepository).persist(any(ServiceItem.class));
+        when(serviceItemRepository.save(any(ServiceItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ServiceItemRequestDto dto = new ServiceItemRequestDto(
             "Alinhamento", "Alinhamento das rodas", new BigDecimal("80.00"), 45
@@ -90,12 +90,13 @@ class ServiceItemServiceTest {
 
         assertThat(result.name()).isEqualTo("Alinhamento");
         assertThat(result.active()).isTrue();
-        verify(serviceItemRepository).persist(any(ServiceItem.class));
+        verify(serviceItemRepository).save(any(ServiceItem.class));
     }
 
     @Test
     void update_whenExists_shouldUpdateFields() {
-        when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleItem));
+        when(serviceItemRepository.fetchById(1L)).thenReturn(Optional.of(sampleItem));
+        when(serviceItemRepository.save(any(ServiceItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ServiceItemRequestDto dto = new ServiceItemRequestDto(
             "Troca de Óleo Premium", "Troca completa premium", new BigDecimal("150.00"), 40
@@ -109,7 +110,8 @@ class ServiceItemServiceTest {
 
     @Test
     void deactivate_whenExists_shouldSetInactive() {
-        when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleItem));
+        when(serviceItemRepository.fetchById(1L)).thenReturn(Optional.of(sampleItem));
+        when(serviceItemRepository.save(any(ServiceItem.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ServiceItemResponseDto result = serviceItemService.deactivate(1L);
 
@@ -118,16 +120,15 @@ class ServiceItemServiceTest {
 
     @Test
     void delete_whenExists_shouldDelete() {
-        when(serviceItemRepository.findByIdOptional(1L)).thenReturn(Optional.of(sampleItem));
-        doNothing().when(serviceItemRepository).delete(sampleItem);
+        when(serviceItemRepository.fetchById(1L)).thenReturn(Optional.of(sampleItem));
 
         assertThatCode(() -> serviceItemService.delete(1L)).doesNotThrowAnyException();
-        verify(serviceItemRepository).delete(sampleItem);
+        verify(serviceItemRepository).removeById(1L);
     }
 
     @Test
     void delete_whenNotFound_shouldThrow() {
-        when(serviceItemRepository.findByIdOptional(99L)).thenReturn(Optional.empty());
+        when(serviceItemRepository.fetchById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> serviceItemService.delete(99L))
             .isInstanceOf(ResourceNotFoundException.class);

@@ -23,6 +23,20 @@ services:
     restart: unless-stopped
 
   # ===================================================
+  # Mailpit (captura de e-mails em dev/local)
+  # SMTP em 1025; UI web em http://localhost:8025
+  # ===================================================
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: oficina_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - oficina_net
+    restart: unless-stopped
+
+  # ===================================================
   # Aplicação Quarkus
   # ===================================================
   app:
@@ -42,6 +56,9 @@ services:
       APP_SEED_ADMIN_PASSWORD: ${APP_SEED_ADMIN_PASSWORD:-admin123}
       APP_SEED_MECHANIC_PASSWORD: ${APP_SEED_MECHANIC_PASSWORD:-mecanico123}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      MAILER_HOST: mailpit
+      MAILER_PORT: 1025
+      MAILER_FROM: ${MAILER_FROM:-nao-responda@oficina.local}
       JAVA_OPTS: "-Xms256m -Xmx512m"
     ports:
       - "8080:8080"
@@ -51,6 +68,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/q/health/live || exit 1"]
       interval: 30s

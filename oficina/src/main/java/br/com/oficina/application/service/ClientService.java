@@ -6,7 +6,7 @@ import br.com.oficina.application.dto.ClientResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Client;
-import br.com.oficina.infrastructure.repository.ClientRepository;
+import br.com.oficina.domain.ports.out.ClientRepositoryPort;
 import br.com.oficina.infrastructure.validation.CpfCnpjUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
@@ -16,8 +16,9 @@ import java.util.List;
 public class ClientService {
 
     public static final String CLIENTE = "Cliente";
-    ClientRepository clientRepository;
-    public ClientService(ClientRepository clientRepository) {
+    ClientRepositoryPort clientRepository;
+
+    public ClientService(ClientRepositoryPort clientRepository) {
         this.clientRepository = clientRepository;
     }
 
@@ -28,7 +29,7 @@ public class ClientService {
     }
 
     public ClientResponseDto findById(Long id) {
-        Client client = clientRepository.findByIdOptional(id)
+        Client client = clientRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(CLIENTE, id));
         return ClientResponseDto.from(client);
     }
@@ -47,13 +48,12 @@ public class ClientService {
             throw new BusinessException("CPF/CNPJ já cadastrado: " + dto.cpfCnpj());
         }
         Client client = new Client(dto.name(), normalized, dto.clientType(), dto.email(), dto.phone());
-        clientRepository.persist(client);
-        return ClientResponseDto.from(client);
+        return ClientResponseDto.from(clientRepository.save(client));
     }
 
     @Transactional
     public ClientResponseDto update(Long id, ClientRequestDto dto) {
-        Client client = clientRepository.findByIdOptional(id)
+        Client client = clientRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(CLIENTE, id));
 
         String normalized = CpfCnpjUtils.normalize(dto.cpfCnpj());
@@ -61,13 +61,13 @@ public class ClientService {
             throw new BusinessException("CPF/CNPJ já cadastrado: " + dto.cpfCnpj());
         }
         client.update(dto.name(), normalized, dto.clientType(), dto.email(), dto.phone());
-        return ClientResponseDto.from(client);
+        return ClientResponseDto.from(clientRepository.save(client));
     }
 
     @Transactional
     public void delete(Long id) {
-        Client client = clientRepository.findByIdOptional(id)
+        clientRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(CLIENTE, id));
-        clientRepository.delete(client);
+        clientRepository.removeById(id);
     }
 }
