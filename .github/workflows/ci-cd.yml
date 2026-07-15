@@ -1,0 +1,168 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: oficina-app
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: mvn verify
+        working-directory: oficina
+        run: mvn verify
+
+  docker-build-push:
+    needs: build-test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (temporárias da sessão AWS Academy — colar antes de disparar)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: ECR login
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push image
+        working-directory: oficina
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }} .
+          docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }} $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+
+  # ATENÇÃO CUSTO: roda `apply -auto-approve` contra AWS real. Restrito a disparo manual
+  # (workflow_dispatch) de propósito — o gate de aprovação de custo do SESSION-GUIDE.md é a
+  # decisão consciente de disparar este workflow, nunca um push automático.
+  terraform-apply:
+    needs: build-test
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (temporárias da sessão AWS Academy — colar antes de disparar)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: hashicorp/setup-terraform@v3
+      - name: terraform init/plan/apply
+        working-directory: oficina/infra
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_allowed_cidr: ${{ secrets.ALLOWED_CIDR }}
+        run: |
+          terraform init
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+
+  # Gating explícito: só faz sentido após build+push da imagem e provisionamento — ambos
+  # workflow_dispatch-only. Sem este `if`, o job dependeria de jobs "skipped" em push/PR e só
+  # não rodava por acidente do encadeamento de needs.
+  deploy-k8s:
+    needs: [docker-build-push, terraform-apply]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials (temporárias da sessão AWS Academy — colar antes de disparar)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Buscar kubeconfig da EC2 via SSH (sem equivalente a "az aks get-credentials" — k3s não é gerenciado)
+        env:
+          K3S_HOST: ${{ secrets.K3S_PUBLIC_IP }}
+          SSH_KEY: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
+        run: |
+          echo "$SSH_KEY" > /tmp/k3s-key.pem
+          chmod 600 /tmp/k3s-key.pem
+          scp -o StrictHostKeyChecking=no -i /tmp/k3s-key.pem ec2-user@$K3S_HOST:/home/ec2-user/.kube/config /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+      - name: Apply base manifests
+        run: kubectl apply -f oficina/k8s/namespace.yaml -f oficina/k8s/configmap.yaml
+      - name: Gerar e aplicar secret do ECR (token de 12h — spec-kubernetes.md)
+        run: |
+          kubectl create secret docker-registry ecr-registry-secret \
+            --namespace oficina \
+            --docker-server="${{ secrets.ECR_REPOSITORY_URL }}" \
+            --docker-username=AWS \
+            --docker-password="$(aws ecr get-login-password --region ${{ env.AWS_REGION }})" \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Generate and apply secret (nunca commitado com valor real)
+        run: |
+          kubectl create secret generic oficina-secrets \
+            --namespace oficina \
+            --from-literal=DB_HOST="${{ secrets.DB_HOST }}" \
+            --from-literal=DB_USERNAME="${{ secrets.DB_USERNAME }}" \
+            --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --from-literal=MAILER_HOST="${{ secrets.MAILER_HOST }}" \
+            --from-literal=MAILER_USERNAME="${{ secrets.MAILER_USERNAME }}" \
+            --from-literal=MAILER_PASSWORD="${{ secrets.MAILER_PASSWORD }}" \
+            --from-literal=APP_SEED_ADMIN_PASSWORD="${{ secrets.APP_SEED_ADMIN_PASSWORD }}" \
+            --from-literal=APP_SEED_MECHANIC_PASSWORD="${{ secrets.APP_SEED_MECHANIC_PASSWORD }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Gerar e aplicar secret das chaves JWT (compartilhado entre réplicas)
+        env:
+          JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY_PEM }}
+          JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY_PEM }}
+        run: |
+          echo "$JWT_PRIVATE_KEY" > /tmp/privateKey.pem
+          echo "$JWT_PUBLIC_KEY" > /tmp/publicKey.pem
+          kubectl create secret generic oficina-jwt-keys \
+            --namespace oficina \
+            --from-file=privateKey.pem=/tmp/privateKey.pem \
+            --from-file=publicKey.pem=/tmp/publicKey.pem \
+            --dry-run=client -o yaml | kubectl apply -f -
+      - name: Apply deployment/service/hpa
+        run: |
+          sed "s#CHANGE_ME_ECR_REPOSITORY_URL#${{ secrets.ECR_REPOSITORY_URL }}#" oficina/k8s/deployment.yaml \
+            | sed "s#:latest#:${{ github.sha }}#" \
+            | kubectl apply -f -
+          kubectl apply -f oficina/k8s/service.yaml -f oficina/k8s/hpa.yaml
+
+  smoke-test:
+    needs: deploy-k8s
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Buscar kubeconfig da EC2 via SSH
+        env:
+          K3S_HOST: ${{ secrets.K3S_PUBLIC_IP }}
+          SSH_KEY: ${{ secrets.K3S_SSH_PRIVATE_KEY }}
+        run: |
+          echo "$SSH_KEY" > /tmp/k3s-key.pem
+          chmod 600 /tmp/k3s-key.pem
+          scp -o StrictHostKeyChecking=no -i /tmp/k3s-key.pem ec2-user@$K3S_HOST:/home/ec2-user/.kube/config /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+      - name: Port-forward and check health endpoint
+        run: |
+          kubectl -n oficina rollout status deployment/oficina-app --timeout=180s
+          kubectl -n oficina port-forward svc/oficina-service 8080:80 &
+          sleep 5
+          curl -sf http://localhost:8080/q/health/live

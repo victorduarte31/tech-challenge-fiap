@@ -368,3 +368,24 @@ O documento cobre:
 
 > Reparos adicionais pós-aprovação foram considerados **fora do escopo deste MVP** (a máquina de
 > estados atual permite edição apenas em `RECEIVED`/`IN_DIAGNOSIS`).
+
+---
+
+## 🚧 Fase 2 — Em andamento
+
+Infraestrutura AWS (Terraform + k3s + RDS + ECR) provisionada e validada manualmente — ver
+[`infra/README.md`](infra/README.md) e [`SESSION-GUIDE.md`](SESSION-GUIDE.md) para o passo a passo de
+provisionamento/destruição a cada sessão do AWS Academy. Deploy Kubernetes validado (pods `Running`, health
+check `200 OK`) — ver [`k8s/README.md`](k8s/README.md).
+
+**Pendente:**
+
+- [ ] Teste de carga confirmando o HPA escalando (material do vídeo demonstrativo).
+- [ ] Pipeline de CI/CD (`.github/workflows/ci-cd.yml`) — ver `spec-github-actions.md`.
+- [ ] Esta seção do README ainda precisa do conteúdo final: descrição da solução, diagrama de arquitetura
+  (Mermaid), instruções reproduzíveis de execução local/deploy/Terraform, link da collection de API, link do
+  vídeo demonstrativo. Ver `spec.document.md` para o contrato completo.
+- [ ] Débito de teste da Fase 1 ainda em aberto (não é infraestrutura, é cobertura de código): teste de
+  resiliência de notificação (`notifySafely` em `WorkOrderService`) e testes de round-trip dos mappers
+  (`Client`/`Vehicle`/`Part`/`ServiceItem`) e do adapter de ordenação (`WorkOrderRepositoryAdapter.findActive`)
+  — ver `ready-to-go.md`, itens 1 e 5, e `spec-test-unit.md`.

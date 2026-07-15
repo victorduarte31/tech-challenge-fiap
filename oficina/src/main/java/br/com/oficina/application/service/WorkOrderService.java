@@ -22,10 +22,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 import java.util.List;
+import org.jboss.logging.Logger;
 
 @ApplicationScoped
 public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrderItemsUseCase,
         ChangeWorkOrderStatusUseCase, ApproveBudgetUseCase, ListWorkOrdersUseCase {
+
+    private static final Logger LOG = Logger.getLogger(WorkOrderService.class);
 
     WorkOrderRepositoryPort workOrderRepository;
     ClientRepositoryPort clientRepository;
@@ -160,7 +163,7 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
         WorkOrder wo = findWorkOrder(id);
         wo.sendForApproval();
         WorkOrder saved = workOrderRepository.save(wo);
-        notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        notifyStatusChange(saved);
         return WorkOrderResponseDto.from(saved);
     }
 
@@ -187,7 +190,7 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
         WorkOrder wo = findWorkOrder(id);
         wo.complete();
         WorkOrder saved = workOrderRepository.save(wo);
-        notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        notifyStatusChange(saved);
         return WorkOrderResponseDto.from(saved);
     }
 
@@ -197,7 +200,7 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
         WorkOrder wo = findWorkOrder(id);
         wo.deliver();
         WorkOrder saved = workOrderRepository.save(wo);
-        notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        notifyStatusChange(saved);
         return WorkOrderResponseDto.from(saved);
     }
 
@@ -243,6 +246,23 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     private WorkOrder findWorkOrder(Long id) {
         return workOrderRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Ordem de Serviço", id));
+    }
+
+    /**
+     * Notifica o cliente sobre a transição já persistida, sem deixar uma falha de
+     * notificação abortar a transação: a mudança de status é a invariante de negócio;
+     * o e-mail é efeito colateral. O {@code EmailNotificationAdapter} já engole erros
+     * de SMTP, mas o boundary transacional é aqui — este try/catch garante que
+     * qualquer implementação de {@code NotificationGatewayPort} que venha a propagar
+     * uma exceção não force o rollback do {@code save} anterior (defesa em profundidade).
+     */
+    private void notifyStatusChange(WorkOrder saved) {
+        try {
+            notificationGateway.notifyStatusChange(WorkOrderStatusChangedEvent.of(saved));
+        } catch (RuntimeException e) {
+            LOG.errorf(e, "Falha ao notificar mudança de status da OS %s; transição preservada.",
+                saved.getOrderNumber());
+        }
     }
 
     private void addServiceToOrder(WorkOrder wo, WorkOrderServiceDto dto) {

@@ -307,6 +307,12 @@
                                         <include>br.com.oficina.application.service</include>
                                         <include>br.com.oficina.infrastructure.security</include>
                                         <include>br.com.oficina.infrastructure.validation</include>
+                                        <!-- Adapter de notificação: lógica de ramificação real (template por
+                                             status + resiliência a falha de SMTP), agora coberta e protegida.
+                                             Os adapters de repositório (delegação fina ao Panache) ficam fora
+                                             do gate de propósito — spec-test-unit.md: getters/setters e classes
+                                             anêmicas não justificam inclusão forçada. -->
+                                        <include>br.com.oficina.infrastructure.adapters.out.notification</include>
                                     </includes>
                                 </rule>
                             </rules>

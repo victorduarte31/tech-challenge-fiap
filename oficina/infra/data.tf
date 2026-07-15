@@ -1,11 +1,8 @@
 # Conta AWS Academy bloqueia iam:CreateRole/CreatePolicy — nenhum "resource aws_iam_role" existe
-# neste módulo. LabRole/LabInstanceProfile já vêm com as permissões necessárias (EC2, RDS, ECR)
-# pré-anexadas pelo Academy. Se o nome divergir na sua conta, ajuste os dois "name" abaixo —
-# "terraform plan" falha com NoSuchEntity e o nome errado fica explícito no erro.
-data "aws_iam_role" "lab_role" {
-  name = "LabRole"
-}
-
+# neste módulo. O LabInstanceProfile já vem com as permissões necessárias (EC2, RDS, ECR)
+# pré-anexadas pelo Academy e é o único IAM referenciado (ec2.tf). Se o nome divergir na sua
+# conta, ajuste o "name" abaixo — "terraform plan" falha com NoSuchEntity e o nome errado fica
+# explícito no erro.
 data "aws_iam_instance_profile" "lab_instance_profile" {
   name = "LabInstanceProfile"
 }

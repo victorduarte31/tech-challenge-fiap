@@ -4,6 +4,7 @@ import br.com.oficina.application.dto.*;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
+import br.com.oficina.domain.event.WorkOrderStatusChangedEvent;
 import br.com.oficina.domain.model.*;
 import br.com.oficina.domain.ports.out.ClientRepositoryPort;
 import br.com.oficina.domain.ports.out.NotificationGatewayPort;
@@ -379,6 +380,72 @@ class WorkOrderServiceTest {
 
         assertThat(part.getStockQuantity()).isEqualTo(10);
         assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.CANCELLED);
+    }
+
+    @Test
+    void sendForApproval_shouldNotifyCustomerWithAwaitingApprovalEvent() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
+        when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
+
+        workOrderService.sendForApproval(1L);
+
+        ArgumentCaptor<WorkOrderStatusChangedEvent> captor =
+            ArgumentCaptor.forClass(WorkOrderStatusChangedEvent.class);
+        verify(notificationGateway).notifyStatusChange(captor.capture());
+        assertThat(captor.getValue().newStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+        assertThat(captor.getValue().orderNumber()).isEqualTo("OS-000001");
+    }
+
+    @Test
+    void complete_shouldNotifyCustomerWithFinishedEvent() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_EXECUTION);
+        DomainTestFixtures.setField(workOrder, "executionStartedAt", LocalDateTime.now());
+        when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
+
+        workOrderService.complete(1L);
+
+        ArgumentCaptor<WorkOrderStatusChangedEvent> captor =
+            ArgumentCaptor.forClass(WorkOrderStatusChangedEvent.class);
+        verify(notificationGateway).notifyStatusChange(captor.capture());
+        assertThat(captor.getValue().newStatus()).isEqualTo(WorkOrderStatus.FINISHED);
+    }
+
+    @Test
+    void deliver_shouldNotifyCustomerWithDeliveredEvent() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.FINISHED);
+        when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
+
+        workOrderService.deliver(1L);
+
+        ArgumentCaptor<WorkOrderStatusChangedEvent> captor =
+            ArgumentCaptor.forClass(WorkOrderStatusChangedEvent.class);
+        verify(notificationGateway).notifyStatusChange(captor.capture());
+        assertThat(captor.getValue().newStatus()).isEqualTo(WorkOrderStatus.DELIVERED);
+    }
+
+    @Test
+    void deliver_whenNotificationFails_shouldNotPropagateAndKeepTransition() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.FINISHED);
+        when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
+        doThrow(new RuntimeException("gateway down"))
+            .when(notificationGateway).notifyStatusChange(any());
+
+        WorkOrderResponseDto result = workOrderService.deliver(1L);
+
+        // Transição preservada apesar da falha na notificação (defesa em profundidade).
+        assertThat(result.status()).isEqualTo(WorkOrderStatus.DELIVERED);
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.DELIVERED);
+        verify(workOrderRepository, atLeastOnce()).save(workOrder);
+    }
+
+    @Test
+    void approve_shouldNotNotifyCustomer() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
+
+        workOrderService.approve(1L);
+
+        verify(notificationGateway, never()).notifyStatusChange(any());
     }
 
     @Test
