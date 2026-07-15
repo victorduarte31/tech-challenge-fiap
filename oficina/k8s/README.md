@@ -32,11 +32,8 @@ Gera localmente (nunca commitar `keys/*.pem`, já estão no `.gitignore` da raiz
 cd .. && ./generate-keys.sh && cd k8s
 ```
 
-```bash
-kubectl create secret generic oficina-jwt-keys \
-  --from-file=privateKey.pem=../keys/privateKey.pem \
-  --from-file=publicKey.pem=../keys/publicKey.pem \
-  --namespace oficina
+```powershell
+kubectl create secret generic oficina-jwt-keys --namespace oficina --from-file=privateKey.pem=keys\privateKey.pem --from-file=publicKey.pem=keys\publicKey.pem
 ```
 
 ## 4. Secret da aplicação (DB + SMTP + seed)

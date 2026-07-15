@@ -13,9 +13,9 @@ data:
   MAILER_FROM: "nao-responda@oficina.com"
   MAILER_PORT: "587"
   MAILER_START_TLS: "REQUIRED"
-  # false por padrão: recriar credenciais padrão a cada rollout não faz sentido em produção real.
-  # Para a gravação do vídeo demonstrativo, pode trocar para "true" (login pronto) — nesse caso,
-  # defina senhas reais em APP_SEED_ADMIN_PASSWORD/APP_SEED_MECHANIC_PASSWORD no secret.yaml.
-  APP_SEED_ENABLED: "false"
+  # true para a gravação do vídeo demonstrativo (login pronto) — em produção real, recriar
+  # credenciais padrão a cada rollout não faz sentido; voltar para "false" depois da demo.
+  # Defina senhas reais em APP_SEED_ADMIN_PASSWORD/APP_SEED_MECHANIC_PASSWORD no secret.yaml.
+  APP_SEED_ENABLED: "true"
   APP_SEED_ADMIN_USERNAME: "admin"
   APP_SEED_MECHANIC_USERNAME: "mecanico"
