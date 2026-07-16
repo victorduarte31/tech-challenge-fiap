@@ -94,6 +94,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Liberar SSH temporariamente para o IP do runner (security group só aceita allowed_cidr)
+        run: |
+          RUNNER_IP="$(curl -s https://api.ipify.org)/32"
+          SG_ID="$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=oficina-k3s-sg" --query 'SecurityGroups[0].GroupId' --output text)"
+          aws ec2 authorize-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 22 --cidr "$RUNNER_IP"
+          echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
+          echo "SG_ID=$SG_ID" >> $GITHUB_ENV
       - name: Buscar kubeconfig da EC2 via SSH (sem equivalente a "az aks get-credentials" — k3s não é gerenciado)
         env:
           K3S_HOST: ${{ secrets.K3S_PUBLIC_IP }}
@@ -144,6 +151,12 @@ jobs:
             | sed "s#:latest#:${{ github.sha }}#" \
             | kubectl apply -f -
           kubectl apply -f oficina/k8s/service.yaml -f oficina/k8s/hpa.yaml
+      - name: Revogar acesso SSH temporário do runner
+        if: always()
+        run: |
+          if [ -n "$SG_ID" ] && [ -n "$RUNNER_IP" ]; then
+            aws ec2 revoke-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 22 --cidr "$RUNNER_IP" || true
+          fi
 
   smoke-test:
     needs: deploy-k8s
@@ -151,6 +164,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure AWS credentials (temporárias da sessão AWS Academy — colar antes de disparar)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Liberar SSH temporariamente para o IP do runner (security group só aceita allowed_cidr)
+        run: |
+          RUNNER_IP="$(curl -s https://api.ipify.org)/32"
+          SG_ID="$(aws ec2 describe-security-groups --filters "Name=tag:Name,Values=oficina-k3s-sg" --query 'SecurityGroups[0].GroupId' --output text)"
+          aws ec2 authorize-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 22 --cidr "$RUNNER_IP"
+          echo "RUNNER_IP=$RUNNER_IP" >> $GITHUB_ENV
+          echo "SG_ID=$SG_ID" >> $GITHUB_ENV
       - name: Buscar kubeconfig da EC2 via SSH
         env:
           K3S_HOST: ${{ secrets.K3S_PUBLIC_IP }}
@@ -166,3 +193,9 @@ jobs:
           kubectl -n oficina port-forward svc/oficina-service 8080:80 &
           sleep 5
           curl -sf http://localhost:8080/q/health/live
+      - name: Revogar acesso SSH temporário do runner
+        if: always()
+        run: |
+          if [ -n "$SG_ID" ] && [ -n "$RUNNER_IP" ]; then
+            aws ec2 revoke-security-group-ingress --group-id "$SG_ID" --protocol tcp --port 22 --cidr "$RUNNER_IP" || true
+          fi
