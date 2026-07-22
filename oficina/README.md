@@ -371,21 +371,165 @@ O documento cobre:
 
 ---
 
-## 🚧 Fase 2 — Em andamento
+## Fase 2 — Escalabilidade, Infraestrutura e Automação
 
-Infraestrutura AWS (Terraform + k3s + RDS + ECR) provisionada e validada manualmente — ver
-[`infra/README.md`](infra/README.md) e [`SESSION-GUIDE.md`](SESSION-GUIDE.md) para o passo a passo de
-provisionamento/destruição a cada sessão do AWS Academy. Deploy Kubernetes validado (pods `Running`, health
-check `200 OK`) — ver [`k8s/README.md`](k8s/README.md).
+### Objetivo da fase
 
-**Pendente:**
+A Fase 1 entregou o MVP funcional (gestão de OS, clientes, veículos e peças). A Fase 2 evolui essa base
+para suportar operação real com múltiplas unidades e picos de demanda, sem alterar as regras de negócio:
 
-- [ ] Teste de carga confirmando o HPA escalando (material do vídeo demonstrativo).
-- [ ] Pipeline de CI/CD (`.github/workflows/ci-cd.yml`) — ver `spec-github-actions.md`.
-- [ ] Esta seção do README ainda precisa do conteúdo final: descrição da solução, diagrama de arquitetura
-  (Mermaid), instruções reproduzíveis de execução local/deploy/Terraform, link da collection de API, link do
-  vídeo demonstrativo. Ver `spec.document.md` para o contrato completo.
-- [ ] Débito de teste da Fase 1 ainda em aberto (não é infraestrutura, é cobertura de código): teste de
-  resiliência de notificação (`notifySafely` em `WorkOrderService`) e testes de round-trip dos mappers
-  (`Client`/`Vehicle`/`Part`/`ServiceItem`) e do adapter de ordenação (`WorkOrderRepositoryAdapter.findActive`)
-  — ver `ready-to-go.md`, itens 1 e 5, e `spec-test-unit.md`.
+- **Refatoração arquitetural** — isolamento do domínio (`WorkOrder` como POJO puro, ports `in`/`out`
+  explícitos) reduzindo o acoplamento ao Quarkus/JPA, com testes automatizados cobrindo os fluxos críticos
+  (detalhe em [`docs/DDD.md`](docs/DDD.md) e `spec-hexagonal.md`).
+- **Conteinerização** consistente entre desenvolvimento local e produção (mesmo `Dockerfile` multi-stage).
+- **Orquestração via Kubernetes** com auto-scaling horizontal (HPA) reagindo a carga de CPU.
+- **Infraestrutura como código** (Terraform) provisionando cluster e banco de forma reprodutível.
+- **Pipeline de CI/CD** automatizando build, testes, build/push de imagem e deploy.
+
+### Arquitetura proposta
+
+```mermaid
+flowchart TB
+    subgraph Client["Clientes"]
+        Browser["Cliente / Front-end (Postman, browser, app)"]
+    end
+
+    subgraph AWS["AWS (provisionado via Terraform)"]
+        subgraph EC2["EC2 t3.medium — cluster k3s"]
+            SVC["Service (ClusterIP/NodePort)<br/>oficina-service"]
+            subgraph HPA["Deployment + HPA (2 a 4 réplicas, CPU 70%)"]
+                Pod1["Pod oficina-app #1"]
+                Pod2["Pod oficina-app #2"]
+                PodN["Pod oficina-app #N (scale-out)"]
+            end
+            CM["ConfigMap<br/>oficina-config"]
+            SEC["Secrets<br/>DB / SMTP / JWT / ECR"]
+        end
+        RDS[("RDS PostgreSQL<br/>db.t4g.micro")]
+        ECR["ECR — registro da imagem<br/>oficina-app"]
+    end
+
+    subgraph CICD["GitHub Actions (CI/CD)"]
+        Build["build-test<br/>mvn verify"]
+        DockerJob["docker-build-push"]
+        TF["terraform-apply"]
+        Deploy["deploy-k8s"]
+        Smoke["smoke-test"]
+    end
+
+    SMTP["Servidor SMTP<br/>(notificação de status)"]
+
+    Browser -->|"HTTPS :8080"| SVC
+    SVC --> Pod1
+    SVC --> Pod2
+    SVC --> PodN
+    CM -.env.-> Pod1
+    SEC -.env/secret.-> Pod1
+    Pod1 -->|"JDBC"| RDS
+    Pod1 -->|"notificação de status"| SMTP
+
+    Build --> DockerJob --> ECR
+    Build --> TF --> RDS
+    TF --> EC2
+    DockerJob --> Deploy
+    TF --> Deploy
+    Deploy -->|"kubectl apply"| HPA
+    Deploy --> Smoke
+    ECR -->|"pull da imagem"| Pod1
+
+    style HPA fill:#E3F2FD,stroke:#1565C0
+    style CICD fill:#FFF3E0,stroke:#EF6C00
+    style AWS fill:#F1F8E9,stroke:#33691E
+```
+
+**Componentes da aplicação:** container único (`oficina-app`, Quarkus) expondo as APIs administrativas
+(`/admin/*`, autenticadas via JWT) e o canal público de acompanhamento (`/public/work-orders/*`, validado
+por CPF/CNPJ). Estado é 100% externalizado (PostgreSQL) — os pods são *stateless* e substituíveis, requisito
+para o HPA escalar horizontalmente sem afetar sessões em andamento.
+
+**Infraestrutura provisionada (Terraform, detalhe em [`infra/README.md`](infra/README.md)):**
+
+| Recurso            | Nome               | Observação                                      |
+|---------------------|--------------------|--------------------------------------------------|
+| VPC                 | `oficina-vpc`      | 1 subnet pública + 2 privadas, sem NAT Gateway   |
+| Cluster Kubernetes  | `oficina-k3s`      | k3s single-node em EC2 `t3.medium`               |
+| Banco de dados      | `oficina-postgres` | RDS PostgreSQL `db.t4g.micro`, single-AZ         |
+| Registro de imagem  | `oficina-app`      | ECR privado                                       |
+
+> k3s (single-node) em vez de EKS gerenciado: custo e simplicidade adequados ao volume do desafio, mantendo
+> a API Kubernetes padrão — os manifestos em `/k8s` são portáveis para qualquer cluster gerenciado (EKS,
+> AKS, GKE) sem alteração. Justificativa completa em `spec-terraform-aws.md`.
+
+**Fluxo de deploy (pipeline `.github/workflows/ci-cd.yml`):**
+
+1. `build-test` — roda em todo push/PR: `mvn verify` (build + testes automatizados). Gate de qualidade antes
+   de qualquer publicação.
+2. `docker-build-push` *(manual — `workflow_dispatch`)* — build da imagem Docker e push para o ECR, tag pelo
+   SHA do commit + `latest`.
+3. `terraform-apply` *(manual)* — `terraform init/plan/apply` contra a AWS, provisionando/atualizando VPC,
+   EC2 (k3s), RDS e ECR.
+4. `deploy-k8s` *(manual, depende dos dois anteriores)* — busca o kubeconfig do node k3s via SSM (a API do
+   cluster nunca fica exposta publicamente), aplica `namespace`, `configmap`, gera os `Secrets` (DB, SMTP,
+   chaves JWT, credencial do ECR) a partir de GitHub Secrets, e aplica `deployment` + `service` + `hpa`.
+5. `smoke-test` — aguarda o rollout e valida `GET /q/health/live`.
+
+Os estágios de infraestrutura (`docker-build-push`, `terraform-apply`, `deploy-k8s`) são restritos a disparo
+manual — evita `apply`/deploy automático contra uma conta AWS Academy de créditos limitados a cada push.
+
+### Execução local
+
+```bash
+cd oficina
+docker-compose up --build -d
+```
+
+Detalhes completos (variáveis de ambiente, chaves JWT, modo dev) na seção [Como Executar](#como-executar)
+acima.
+
+### Deploy em Kubernetes
+
+Pré-requisito: cluster provisionado (seção seguinte) e `KUBECONFIG` apontando para ele. Passo a passo
+completo, incluindo geração dos `Secrets`, em [`k8s/README.md`](k8s/README.md):
+
+```bash
+kubectl apply -f k8s/namespace.yaml -f k8s/configmap.yaml
+# Secrets (ECR, JWT, DB/SMTP) — ver k8s/README.md para os comandos completos
+kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/hpa.yaml
+kubectl get pods,hpa,svc -n oficina
+```
+
+### Provisionamento da infraestrutura (Terraform)
+
+Passo a passo completo (bootstrap do backend remoto, variáveis obrigatórias, custo estimado e destruição ao
+final da sessão) em [`infra/README.md`](infra/README.md):
+
+```bash
+cd infra
+terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+> Ambiente roda em conta AWS Academy (créditos limitados por sessão). `terraform destroy` é obrigatório ao
+> final de cada sessão — ver [`SESSION-GUIDE.md`](SESSION-GUIDE.md).
+
+### Collection de API
+
+- Swagger/OpenAPI (gerado automaticamente pelo Quarkus/SmallRye): `http://localhost:8080/swagger-ui` (ou
+  `http://<host>:8080/swagger-ui` no ambiente publicado) — especificação OpenAPI em
+  `http://localhost:8080/q/openapi`.
+- Collection Postman: [`postman/Oficina-Mecanica.postman_collection.json`](postman/Oficina-Mecanica.postman_collection.json).
+
+### Vídeo demonstrativo
+
+[Link do vídeo](#) *(adicionar após a gravação — roteiro em `docs/ROTEIRO-VIDEO.md`)*.
+
+### Débito técnico conhecido (não bloqueia a entrega)
+
+- Cobertura de teste da Fase 1 ainda em aberto: teste de resiliência de notificação (`notifySafely` em
+  `WorkOrderService`) e testes de round-trip dos mappers (`Client`/`Vehicle`/`Part`/`ServiceItem`) — ver
+  `spec-test-unit.md`.
+- Entidades `Client`, `Vehicle`, `Part` e `ServiceItem` ainda são `@Entity` JPA (acopladas ao framework);
+  apenas `WorkOrder` segue o padrão POJO + mapper completo — ver `spec-hexagonal.md`.
+- Sem Testcontainers nos testes de integração (usam H2 em memória); RDS real só é validado no ambiente
+  provisionado.

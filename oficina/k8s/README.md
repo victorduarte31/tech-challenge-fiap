@@ -69,10 +69,18 @@ kubectl port-forward -n oficina svc/oficina-service 8080:80
 curl http://localhost:8080/q/health/live
 ```
 
-Teste de carga simples (material do vídeo demonstrativo — HPA escalando e voltando ao mínimo):
+Teste de carga (material do vídeo demonstrativo — HPA escalando e voltando ao mínimo). Roda **de dentro do
+cluster**, não via `port-forward`: o túnel do `kubectl port-forward` é um único fluxo TCP e vira gargalo do
+lado cliente antes de gerar CPU/memória suficiente nos pods, mascarando o teste.
 
 ```bash
-# instale hey (https://github.com/rakyll/hey) ou use k6
-hey -z 60s -c 50 http://localhost:8080/public/work-orders/OS-000001/status
+kubectl run load-test -n oficina --rm -it --restart=Never --image=williamyeh/hey -- \
+  -z 60s -c 50 http://oficina-service.oficina.svc.cluster.local/public/work-orders/OS-000001/status
+```
+
+Em outro terminal, acompanhar o HPA escalar (usa CPU e memória, o que estourar 70% primeiro dispara o
+scale-out — ver `spec-kubernetes.md`):
+
+```bash
 kubectl get hpa -n oficina -w
 ```
