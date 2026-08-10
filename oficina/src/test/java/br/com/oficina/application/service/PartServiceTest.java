@@ -6,7 +6,7 @@ import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
 import br.com.oficina.domain.model.PartType;
-import br.com.oficina.domain.ports.out.PartRepositoryPort;
+import br.com.oficina.application.ports.out.PartRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

@@ -3,10 +3,16 @@ kind: Service
 metadata:
   name: oficina-service
   namespace: oficina
+  labels:
+    app: oficina-app
 spec:
+  # ClusterIP de propósito: a exposição externa é responsabilidade do Ingress
+  # (ingress.yaml), que dá um único ponto de entrada, com regras de roteamento e
+  # espaço para TLS — em vez de publicar a porta do node diretamente.
   type: ClusterIP
   selector:
     app: oficina-app
   ports:
-    - port: 80
-      targetPort: 8080
+    - name: http
+      port: 80
+      targetPort: http

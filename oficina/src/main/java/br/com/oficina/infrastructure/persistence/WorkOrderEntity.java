@@ -68,6 +68,12 @@ public class WorkOrderEntity {
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
 
+    @Column(name = "approval_token", length = 64)
+    private String approvalToken;
+
+    @Column(name = "approval_token_consumed_at")
+    private LocalDateTime approvalTokenConsumedAt;
+
     @OneToMany(mappedBy = "workOrder", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private final List<WorkOrderPartEntity> parts = new ArrayList<>();
 
@@ -130,6 +136,12 @@ public class WorkOrderEntity {
 
     public LocalDateTime getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(LocalDateTime v) { this.cancelledAt = v; }
+
+    public String getApprovalToken() { return approvalToken; }
+    public void setApprovalToken(String v) { this.approvalToken = v; }
+
+    public LocalDateTime getApprovalTokenConsumedAt() { return approvalTokenConsumedAt; }
+    public void setApprovalTokenConsumedAt(LocalDateTime v) { this.approvalTokenConsumedAt = v; }
 
     public List<WorkOrderPartEntity> getParts() { return parts; }
     public List<WorkOrderServiceItemEntity> getServices() { return services; }

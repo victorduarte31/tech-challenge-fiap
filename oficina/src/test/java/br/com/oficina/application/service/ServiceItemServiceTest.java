@@ -4,7 +4,7 @@ import br.com.oficina.application.dto.ServiceItemRequestDto;
 import br.com.oficina.application.dto.ServiceItemResponseDto;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.ServiceItem;
-import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
+import br.com.oficina.application.ports.out.ServiceItemRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

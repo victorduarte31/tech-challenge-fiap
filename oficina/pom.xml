@@ -143,6 +143,16 @@
             <artifactId>quarkus-smallrye-health</artifactId>
         </dependency>
 
+        <!-- Observabilidade: métricas Prometheus em /q/metrics e log JSON em prod -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-logging-json</artifactId>
+        </dependency>
+
         <!-- E-mail (notificações de mudança de status da OS) -->
         <dependency>
             <groupId>io.quarkus</groupId>
@@ -304,15 +314,22 @@
                                     </limits>
                                     <includes>
                                         <include>br.com.oficina.domain.model</include>
+                                        <!-- Value Objects: CPF/CNPJ, placa e o token de aprovação de uso
+                                             único. Regra de negócio pura, sem desculpa para ficar fora. -->
+                                        <include>br.com.oficina.domain.valueobject</include>
                                         <include>br.com.oficina.application.service</include>
+                                        <include>br.com.oficina.application.validation</include>
                                         <include>br.com.oficina.infrastructure.security</include>
-                                        <include>br.com.oficina.infrastructure.validation</include>
                                         <!-- Adapter de notificação: lógica de ramificação real (template por
                                              status + resiliência a falha de SMTP), agora coberta e protegida.
                                              Os adapters de repositório (delegação fina ao Panache) ficam fora
                                              do gate de propósito — spec-test-unit.md: getters/setters e classes
                                              anêmicas não justificam inclusão forçada. -->
                                         <include>br.com.oficina.infrastructure.adapters.out.notification</include>
+                                        <!-- Tradução de exceção para HTTP: define o contrato de erro da API
+                                             (404/409/422/500) e não vaza stack trace — regressão aqui é
+                                             silenciosa e cara. -->
+                                        <include>br.com.oficina.interfaces.exception</include>
                                     </includes>
                                 </rule>
                             </rules>

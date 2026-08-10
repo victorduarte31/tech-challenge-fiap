@@ -13,6 +13,7 @@
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "approvalToken", "value": "", "description": "Código de autorização de uso único da OS. Chega apenas por e-mail no momento do envio do orçamento — em execução local, veja no Mailpit (http://localhost:8025)." },
     { "key": "adminUser", "value": "admin" },
     { "key": "adminPass", "value": "admin123" },
     { "key": "mecanicoUser", "value": "mecanico" },
@@ -235,7 +236,7 @@
           }
         },
         {
-          "name": "Público - Aprovar Orçamento (exige CPF do dono)",
+          "name": "Público - Aprovar Orçamento (CPF do dono + código do e-mail)",
           "event": [
             {
               "listen": "test",
@@ -246,7 +247,19 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"{{clientCpf}}\"}" },
+            "description": "Preencha a variável approvalToken com o código de autorização recebido por e-mail (em execução local, visível no Mailpit: http://localhost:8025). O código vale para uma única decisão e é invalidado no uso.",
+            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"{{clientCpf}}\", \"approvalToken\": \"{{approvalToken}}\"}" },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": [ "{{baseUrl}}" ], "path": [ "public", "work-orders", "{{orderNumber}}", "approve" ] }
+          }
+        },
+        {
+          "name": "Público - Reaproveitar o mesmo código (422)",
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.test('422 - código de uso único já consumido', () => pm.response.code === 422);" ] } } ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"{{clientCpf}}\", \"approvalToken\": \"{{approvalToken}}\"}" },
             "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": [ "{{baseUrl}}" ], "path": [ "public", "work-orders", "{{orderNumber}}", "approve" ] }
           }
         },
@@ -440,7 +453,29 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"111.444.777-35\"}" },
+            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"111.444.777-35\", \"approvalToken\": \"{{approvalToken}}\"}" },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": [ "{{baseUrl}}" ], "path": [ "public", "work-orders", "{{orderNumber}}", "approve" ] }
+          }
+        },
+        {
+          "name": "Público aprovar sem código de autorização (400)",
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.test('400 - approvalToken obrigatório', () => pm.response.code === 400);" ] } } ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"{{clientCpf}}\"}" },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": [ "{{baseUrl}}" ], "path": [ "public", "work-orders", "{{orderNumber}}", "approve" ] }
+          }
+        },
+        {
+          "name": "Público aprovar com código chutado (404)",
+          "event": [ { "listen": "test", "script": { "type": "text/javascript", "exec": [ "pm.test('404 - não revela se a OS existe', () => pm.response.code === 404);" ] } } ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"clientCpfCnpj\": \"{{clientCpf}}\", \"approvalToken\": \"codigo-chutado\"}" },
             "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": [ "{{baseUrl}}" ], "path": [ "public", "work-orders", "{{orderNumber}}", "approve" ] }
           }
         },

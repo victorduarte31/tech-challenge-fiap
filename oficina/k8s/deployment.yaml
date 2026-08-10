@@ -1,3 +1,15 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: oficina-app
+  namespace: oficina
+# A aplicação não fala com a API do Kubernetes. Montar o token da ServiceAccount
+# (comportamento padrão) só entregaria uma credencial do cluster a quem
+# comprometesse o pod.
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: ecr-registry-secret
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,6 +19,14 @@ metadata:
     app: oficina-app
 spec:
   replicas: 2
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Com 2 réplicas em um único node: sobe 1 pod novo antes de derrubar
+      # qualquer antigo, mantendo capacidade durante o rollout.
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: oficina-app
@@ -14,14 +34,34 @@ spec:
     metadata:
       labels:
         app: oficina-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /q/metrics
+        prometheus.io/port: "8080"
     spec:
-      imagePullSecrets:
-        - name: ecr-registry-secret
+      serviceAccountName: oficina-app
+      securityContext:
+        # O Dockerfile já declara USER 1001, mas o manifesto é quem garante: sem
+        # runAsNonRoot o kubelet aceitaria uma imagem futura que rodasse como root.
+        # runAsUser precisa ser numérico — com um nome de usuário o kubelet não
+        # consegue validar runAsNonRoot e o pod falha ao iniciar.
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: oficina-app
           image: CHANGE_ME_ECR_REPOSITORY_URL:latest
           ports:
-            - containerPort: 8080
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           envFrom:
             - configMapRef:
                 name: oficina-config
@@ -31,28 +71,59 @@ spec:
             - name: jwt-keys
               mountPath: /app/keys
               readOnly: true
+            # Com readOnlyRootFilesystem a JVM ainda precisa de /tmp gravável
+            # (arquivos temporários, hsperfdata). emptyDir resolve sem abrir o resto.
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              # 4 réplicas x 384Mi = 1,5Gi, que cabe no t3.medium (4Gi) junto do
+              # k3s e do Traefik. Com os 512Mi anteriores o 4º pod do scale-out
+              # ficava Pending — justamente no momento da demonstração do HPA.
+              cpu: "200m"
+              memory: "384Mi"
             limits:
               cpu: "1000m"
               memory: "768Mi"
+          # A JVM sobe antes de o Quarkus terminar de abrir o pool e rodar o Flyway.
+          # O startupProbe cobre essa janela (até 60s) e permite que o liveness use
+          # um período curto depois, em vez de um initialDelay inflado que atrasaria
+          # a detecção de travamento em regime.
+          startupProbe:
+            httpGet:
+              path: /q/health/started
+              port: http
+            periodSeconds: 3
+            failureThreshold: 20
           readinessProbe:
             httpGet:
               path: /q/health/ready
-              port: 8080
-            initialDelaySeconds: 20
+              port: http
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /q/health/live
-              port: 8080
-            initialDelaySeconds: 30
+              port: http
             periodSeconds: 15
             failureThreshold: 3
       volumes:
         - name: jwt-keys
           secret:
             secretName: oficina-jwt-keys
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: oficina-app
+  namespace: oficina
+spec:
+  # Protege contra drain do node e outras evicções voluntárias derrubarem todas as
+  # réplicas de uma vez. Não protege contra falha do node — o cluster é single-node
+  # (ver a seção de alta disponibilidade no README).
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: oficina-app

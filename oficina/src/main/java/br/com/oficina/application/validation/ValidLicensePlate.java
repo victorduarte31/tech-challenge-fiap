@@ -1,9 +1,14 @@
-package br.com.oficina.infrastructure.validation;
+package br.com.oficina.application.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 import java.lang.annotation.*;
 
+/**
+ * Expõe na borda HTTP a regra de formato de placa definida no domínio
+ * ({@code domain.valueobject.LicensePlate}) — ver {@link ValidCpfCnpj} para a
+ * justificativa do posicionamento na camada de aplicação.
+ */
 @Documented
 @Constraint(validatedBy = LicensePlateValidator.class)
 @Target({ElementType.FIELD, ElementType.PARAMETER})

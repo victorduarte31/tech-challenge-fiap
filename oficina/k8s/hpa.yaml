@@ -11,15 +11,39 @@ spec:
   minReplicas: 2
   maxReplicas: 4
   metrics:
+    # Só CPU, deliberadamente.
+    #
+    # Escalar por memória com a JVM é uma armadilha: o heap cresce até o limite
+    # configurado e o coletor devolve pouca memória ao sistema operacional. A
+    # métrica de memória do container, portanto, sobe e não desce — o HPA
+    # dispararia o scale-out por uso normal de heap e nunca faria o scale-in,
+    # travando o Deployment em maxReplicas. É exatamente o efeito que estragaria a
+    # demonstração de elasticidade.
+    #
+    # Se houver necessidade real de reagir a pressão de memória, o caminho é uma
+    # métrica de aplicação (jvm_memory_used_bytes, já exposta em /q/metrics via
+    # Micrometer) através do Prometheus Adapter — não a métrica bruta do container.
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
           averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 70
+  behavior:
+    scaleUp:
+      # Reage rápido ao pico: sem janela de estabilização, dobrando a cada 30s.
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+      selectPolicy: Max
+    scaleDown:
+      # Desce devagar: 3 minutos de observação antes de remover réplica, e uma de
+      # cada vez. Evita o flapping em carga intermitente, que derrubaria pods no
+      # meio de requisições em andamento.
+      stabilizationWindowSeconds: 180
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60

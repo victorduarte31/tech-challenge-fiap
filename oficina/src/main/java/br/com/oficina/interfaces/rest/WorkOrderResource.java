@@ -25,6 +25,9 @@ import java.util.List;
 @Tag(name = "Ordens de Serviço", description = "Gestão completa de Ordens de Serviço")
 public class WorkOrderResource {
 
+    /** Convenção de fato para paginação em REST; exposto ao browser via CORS. */
+    static final String TOTAL_COUNT_HEADER = "X-Total-Count";
+
     private final CreateWorkOrderUseCase createWorkOrder;
     private final ListWorkOrdersUseCase listWorkOrders;
     private final ManageWorkOrderItemsUseCase manageItems;
@@ -43,18 +46,26 @@ public class WorkOrderResource {
     @GET
     @Operation(
         summary = "Listar OS (paginado; filtro opcional por status)",
-        description = "Sem filtro, retorna apenas as OS ativas (exclui FINISHED/DELIVERED), " +
-                      "ordenadas por prioridade de status (Execução > Aguardando Aprovação > " +
-                      "Diagnóstico > Recebida) e, dentro do mesmo status, das mais antigas para " +
-                      "as mais recentes. Use o parâmetro status= para consultar OS encerradas."
+        description = "Sem filtro, retorna apenas as OS ativas — exclui logicamente os estados " +
+                      "terminais (FINISHED/DELIVERED/CANCELLED) —, ordenadas por prioridade de " +
+                      "status (Execução > Aguardando Aprovação > Diagnóstico > Recebida) e, dentro " +
+                      "do mesmo status, das mais antigas para as mais recentes. Use o parâmetro " +
+                      "status= para consultar OS encerradas. O total de registros (ignorando a " +
+                      "paginação) vem no cabeçalho X-Total-Count."
     )
-    public List<WorkOrderResponseDto> list(@QueryParam("status") WorkOrderStatus status,
-                                           @QueryParam("page") @DefaultValue("0") int page,
-                                           @QueryParam("size") @DefaultValue("20") int size) {
+    public Response list(@QueryParam("status") WorkOrderStatus status,
+                         @QueryParam("page") @DefaultValue("0") int page,
+                         @QueryParam("size") @DefaultValue("20") int size) {
+        List<WorkOrderResponseDto> items;
+        long total;
         if (status != null) {
-            return listWorkOrders.listByStatus(status, page, size);
+            items = listWorkOrders.listByStatus(status, page, size);
+            total = listWorkOrders.countByStatus(status);
+        } else {
+            items = listWorkOrders.listActive(page, size);
+            total = listWorkOrders.countActive();
         }
-        return listWorkOrders.listActive(page, size);
+        return Response.ok(items).header(TOTAL_COUNT_HEADER, total).build();
     }
 
     @GET

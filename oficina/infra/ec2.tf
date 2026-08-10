@@ -20,7 +20,7 @@ resource "aws_eip" "k3s" {
 
 resource "aws_instance" "k3s" {
   ami                    = data.aws_ssm_parameter.al2023_ami.value
-  instance_type          = "t3.medium"
+  instance_type          = var.instance_type
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.k3s.id]
   iam_instance_profile   = data.aws_iam_instance_profile.lab_instance_profile.name
@@ -29,13 +29,31 @@ resource "aws_instance" "k3s" {
   root_block_device {
     volume_type = "gp3"
     volume_size = 20
+
+    # O disco do node guarda o etcd do k3s (que contém os Secrets do cluster: senha
+    # do banco, chave privada do JWT, credencial do ECR) e o kubeconfig. Criptografar
+    # com a chave gerenciada da AWS é gratuito; não fazê-lo deixaria tudo isso em
+    # texto claro num snapshot ou volume órfão.
+    encrypted = true
+  }
+
+  # IMDSv2 obrigatório: sem isto, qualquer SSRF na aplicação (ou num pod) alcança
+  # http://169.254.169.254 com um simples GET e lê as credenciais temporárias do
+  # instance profile. Com http_tokens=required é preciso um PUT prévio para obter o
+  # token, o que a maioria dos vetores de SSRF não consegue fazer.
+  # hop_limit=1 impede que o tráfego de dentro de um container alcance o IMDS.
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
   }
 
   user_data = templatefile("${path.module}/user_data.sh.tpl", {
     k3s_public_ip = aws_eip.k3s.public_ip
   })
 
-  tags = { Name = "${var.project_name}-k3s", Project = var.project_name }
+  tags = { Name = "${var.project_name}-k3s" }
 }
 
 resource "aws_eip_association" "k3s" {

@@ -1,0 +1,30 @@
+# Exposição externa da API.
+#
+# Sem este recurso o Service era ClusterIP e o security group só abria 22 e 6443:
+# a aplicação só podia ser consumida via "kubectl port-forward", o que não
+# demonstra um ambiente publicado. O Traefik já vem embarcado no k3s e é publicado
+# no node pelo servicelb, então a API responde em http://<ip-publico-da-ec2>/
+# assim que a regra de porta 80 do security group (infra/security_groups.tf) existe.
+#
+# Sem "host": casa com qualquer Host header, o que permite acessar direto pelo IP
+# público — não há domínio registrado neste ambiente. Com um domínio, bastaria
+# adicionar `host:` e uma seção `tls:` apontando para um Secret de certificado.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oficina-ingress
+  namespace: oficina
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oficina-service
+                port:
+                  name: http

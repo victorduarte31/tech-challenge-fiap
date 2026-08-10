@@ -89,17 +89,15 @@ Após subir a aplicação, acesse:
 
 Em **dev** (via `docker-compose.yml`) os seguintes usuários são criados na primeira execução:
 
-| Usuário   | Senha (dev)  | Papel     | Permissões                                                                                                                       |
-|-----------|--------------|-----------|----------------------------------------------------------------------------------------------------------------------------------|
-| admin     | admin123     | ADMIN     | Dono — acesso total                                                                                                              |
-| atendente | atendente123 | ATTENDANT | Cadastros (criar/editar) e operação de OS; **sem** exclusão, métricas, ajuste de estoque/cancelamento diretos (usa solicitações) |
-
-> O perfil **MECHANIC** foi descontinuado (o mecânico não acessa o sistema). A migração
-> `V5__remove_legacy_mechanic_users.sql` remove usuários legados com esse papel.
+| Usuário  | Senha (dev)  | Papel   | Permissões                                                                              |
+|----------|--------------|---------|-----------------------------------------------------------------------------------------|
+| admin    | admin123     | ADMIN   | Acesso total, incluindo exclusões, métricas, ajuste de estoque e cancelamento de OS      |
+| mecanico | mecanico123  | MECHANIC| Consulta e operação da OS + cadastros (leitura/criação); **sem** exclusão nem métricas   |
 
 > ⚠️ **Em produção, defina obrigatoriamente** as variáveis `APP_SEED_ADMIN_PASSWORD` e
-> `APP_SEED_ATTENDANT_PASSWORD`. Se não forem definidas, o sistema **gera senhas aleatórias**
-> e as registra no log apenas uma vez. Após criar os usuários, defina `APP_SEED_ENABLED=false`.
+> `APP_SEED_MECHANIC_PASSWORD`. Se não forem definidas, o sistema **gera senhas aleatórias**
+> e as registra no log apenas uma vez — comportamento de laboratório, documentado em
+> `DataSeeder`. Após criar os usuários, defina `APP_SEED_ENABLED=false`.
 
 ## Autenticação
 
@@ -130,66 +128,73 @@ RECEIVED → IN_DIAGNOSIS → AWAITING_APPROVAL → IN_EXECUTION → FINISHED �
                                  CANCELLED
 ```
 
-| Ação                           | Endpoint                                          | Papel           |
-|--------------------------------|---------------------------------------------------|-----------------|
-| Criar OS                       | `POST /admin/work-orders`                         | ADMIN/ATTENDANT |
-| Iniciar diagnóstico            | `PATCH /admin/work-orders/{id}/start-diagnosis`   | ADMIN/ATTENDANT |
-| Enviar orçamento               | `PATCH /admin/work-orders/{id}/send-for-approval` | ADMIN/ATTENDANT |
-| Cliente aprova (remoto)        | `POST /public/work-orders/{orderNumber}/approve`  | Público (¹)     |
-| Cliente rejeita (remoto)       | `POST /public/work-orders/{orderNumber}/reject`   | Público (¹)     |
-| Aprovar (registro presencial)  | `PATCH /admin/work-orders/{id}/approve`           | ADMIN/ATTENDANT |
-| Rejeitar (registro presencial) | `PATCH /admin/work-orders/{id}/reject`            | ADMIN/ATTENDANT |
-| Concluir execução              | `PATCH /admin/work-orders/{id}/complete`          | ADMIN/ATTENDANT |
-| Registrar entrega              | `PATCH /admin/work-orders/{id}/deliver`           | ADMIN/ATTENDANT |
-| Cancelar                       | `PATCH /admin/work-orders/{id}/cancel`            | ADMIN           |
+| Ação                           | Endpoint                                          | Papel          |
+|--------------------------------|---------------------------------------------------|----------------|
+| Criar OS                       | `POST /admin/work-orders`                         | ADMIN/MECHANIC |
+| Iniciar diagnóstico            | `PATCH /admin/work-orders/{id}/start-diagnosis`   | ADMIN/MECHANIC |
+| Enviar orçamento               | `PATCH /admin/work-orders/{id}/send-for-approval` | ADMIN/MECHANIC |
+| Cliente aprova (remoto)        | `POST /public/work-orders/{orderNumber}/approve`  | Público (¹)    |
+| Cliente rejeita (remoto)       | `POST /public/work-orders/{orderNumber}/reject`   | Público (¹)    |
+| Aprovar (registro presencial)  | `PATCH /admin/work-orders/{id}/approve`           | ADMIN/MECHANIC |
+| Rejeitar (registro presencial) | `PATCH /admin/work-orders/{id}/reject`            | ADMIN/MECHANIC |
+| Concluir execução              | `PATCH /admin/work-orders/{id}/complete`          | ADMIN/MECHANIC |
+| Registrar entrega              | `PATCH /admin/work-orders/{id}/deliver`           | ADMIN/MECHANIC |
+| Cancelar                       | `PATCH /admin/work-orders/{id}/cancel`            | ADMIN          |
 
 > (¹) **Approve/Reject — dois canais distintos**
 > - **Canal público** (`/public/work-orders/{orderNumber}/approve|reject`): destinado ao
-    > próprio cliente aprovar/rejeitar remotamente seu orçamento. Exige o número da OS e
-    > prova de identidade (CPF/CNPJ) no corpo da requisição.
+    > próprio cliente aprovar/rejeitar remotamente seu orçamento. Exige o número da OS,
+    > o CPF/CNPJ e o **código de autorização de uso único** recebido por e-mail.
 > - **Canal administrativo** (`/admin/work-orders/{id}/approve|reject`): destinado ao
-    > atendente registrar uma aprovação/rejeição feita **presencialmente ou por telefone**
-    > pelo cliente. Mantém auditoria via JWT do operador (ADMIN/ATTENDANT).
+    > operador registrar uma aprovação/rejeição feita **presencialmente ou por telefone**
+    > pelo cliente. Mantém auditoria via JWT do operador (ADMIN/MECHANIC) e não exige o
+    > código — é o caminho para clientes sem e-mail cadastrado.
 
-## Solicitações (fluxo de aprovação — maker-checker)
+## Listagem de OS (fila de trabalho)
 
-Operações sensíveis têm execução direta restrita ao **dono** (ADMIN). A **atendente**
-(ATTENDANT) não as executa: abre uma **solicitação** com justificativa obrigatória, que
-o dono aprova (executando a operação) ou rejeita. Tudo auditado (solicitante, motivo,
-quem decidiu).
+`GET /admin/work-orders` devolve a **fila ativa**:
 
-| Ação                                   | Endpoint                                | Papel           |
-|----------------------------------------|-----------------------------------------|-----------------|
-| Solicitar ajuste de estoque            | `POST /admin/requests/stock-adjustment` | ADMIN/ATTENDANT |
-| Solicitar cancelamento de OS           | `POST /admin/requests/cancellation`     | ADMIN/ATTENDANT |
-| Listar solicitações (filtro `?status`) | `GET /admin/requests`                   | ADMIN           |
-| Contagem de pendentes                  | `GET /admin/requests/pending-count`     | ADMIN           |
-| Aprovar (executa a operação)           | `POST /admin/requests/{id}/approve`     | ADMIN           |
-| Rejeitar                               | `POST /admin/requests/{id}/reject`      | ADMIN           |
-| Ajustar estoque **direto**             | `PATCH /admin/parts/{id}/stock`         | ADMIN           |
-| Cancelar OS **direto**                 | `PATCH /admin/work-orders/{id}/cancel`  | ADMIN           |
+- ordenada por prioridade de status — **Em Execução > Aguardando Aprovação > Diagnóstico >
+  Recebida** — e, dentro do mesmo status, das **mais antigas para as mais recentes**;
+- com **exclusão lógica** (nunca física) dos estados terminais: `FINISHED`, `DELIVERED` e
+  também `CANCELLED` — uma OS cancelada não tem mais trabalho pendente, então não pertence
+  à fila. Todas continuam consultáveis por `GET /admin/work-orders?status=DELIVERED`;
+- com o total de registros, ignorando a paginação, no cabeçalho **`X-Total-Count`** (também
+  presente em `/admin/clients`, `/admin/vehicles` e `/admin/parts`).
 
-> Na aprovação, a operação real roda na mesma transação; se falhar (estoque
-> insuficiente, OS já cancelada), há rollback e a solicitação permanece `PENDING`.
+A prioridade é declarada no enum de domínio `WorkOrderStatus` (`listingPriority()` /
+`isTerminal()`) e a consulta de persistência é derivada dela — não há uma segunda cópia da
+regra escrita à mão no adapter.
 
 ## Endpoints Públicos (sem autenticação)
 
-| Método | Endpoint                                    | Descrição                           |
-|--------|---------------------------------------------|-------------------------------------|
-| GET    | `/public/work-orders/{orderNumber}/status`  | Consultar status da OS              |
-| POST   | `/public/work-orders/{orderNumber}/approve` | Aprovar orçamento (exige CPF/CNPJ)  |
-| POST   | `/public/work-orders/{orderNumber}/reject`  | Rejeitar orçamento (exige CPF/CNPJ) |
+| Método | Endpoint                                    | Descrição                                     |
+|--------|---------------------------------------------|-----------------------------------------------|
+| GET    | `/public/work-orders/{orderNumber}/status`  | Consultar status da OS                        |
+| POST   | `/public/work-orders/{orderNumber}/approve` | Aprovar orçamento (CPF/CNPJ + código do e-mail) |
+| POST   | `/public/work-orders/{orderNumber}/reject`  | Rejeitar orçamento (CPF/CNPJ + código do e-mail) |
 
-> **Aprovação/rejeição pública — exigência de identidade**
-> Os endpoints `approve`/`reject` exigem o CPF/CNPJ do cliente no corpo da requisição.
-> O sistema valida que esse documento bate com o cliente associado à OS — caso contrário
-> retorna `404` (mesma resposta de OS inexistente, para não distinguir cenários).
+> **Aprovação/rejeição pública — duas provas independentes**
+>
+> O número da OS é sequencial (`OS-000001`, `OS-000002`…) e portanto enumerável, e o
+> CPF/CNPJ é um dado amplamente conhecido. Só com esses dois, um terceiro conseguiria
+> aprovar ou cancelar o orçamento de outra pessoa por força bruta. Por isso `approve` e
+> `reject` exigem também um **código de autorização de 256 bits** gerado no envio do
+> orçamento, entregue **exclusivamente no e-mail do cliente** e invalidado no primeiro uso.
+>
+> - CPF/CNPJ divergente → `404`, com a mesma mensagem de OS inexistente (não confirma quais
+>   números de OS existem)
+> - código ausente → `400`; código inválido → `404`; código já usado → `422`
+> - reenviar o orçamento gera um código novo e invalida o anterior
+>
+> O código **não** aparece em nenhuma resposta da API — nem para o operador autenticado. Em
+> execução local, o e-mail é capturado pelo Mailpit em <http://localhost:8025>.
 >
 > Exemplo:
 > ```bash
 > curl -X POST http://localhost:8080/public/work-orders/OS-000001/approve \
 >   -H "Content-Type: application/json" \
->   -d '{"clientCpfCnpj": "111.444.777-35"}'
+>   -d '{"clientCpfCnpj": "111.444.777-35", "approvalToken": "<código recebido por e-mail>"}'
 > ```
 
 ## Executando os Testes
@@ -208,23 +213,36 @@ mvn test
 
 ```
 src/main/java/br/com/oficina/
-├── domain/
-│   ├── model/          # Domínio. WorkOrder (aggregate root) é POJO puro + VOs
-│   │                   #   (CustomerSnapshot/VehicleSnapshot). Supporting domains
-│   │                   #   (Client, Vehicle, Part, ServiceItem) são entidades JPA.
-│   └── exception/      # Exceções de domínio
+├── domain/                 # Zero dependência de framework (sem Spring/Quarkus/JPA)
+│   ├── model/              # Aggregates e enums. WorkOrder é POJO puro; Client, Vehicle,
+│   │                       #   Part e ServiceItem também — cada um com Entity+Mapper próprios
+│   ├── valueobject/        # CpfCnpj, LicensePlate, ApprovalToken
+│   ├── event/              # WorkOrderStatusChangedEvent
+│   └── exception/          # Exceções de domínio
 ├── application/
-│   ├── dto/            # Data Transfer Objects (request/response)
-│   └── service/        # Serviços de aplicação (casos de uso)
+│   ├── dto/                # Data Transfer Objects (request/response)
+│   ├── ports/in/           # Driver ports (casos de uso)
+│   ├── ports/out/          # Driven ports (repositórios, notificação)
+│   ├── service/            # Implementação dos casos de uso
+│   └── validation/         # Anotações Bean Validation que delegam aos VOs do domínio
 ├── infrastructure/
-│   ├── persistence/    # WorkOrderEntity (+linhas) e WorkOrderMapper (isola JPA do core)
-│   ├── repository/     # Repositórios Panache + adapter de persistência da OS
-│   ├── security/       # Autenticação JWT, AppUser
-│   └── validation/     # Validadores de CPF/CNPJ e placa
+│   ├── adapters/out/       # Implementações dos driven ports (persistência, e-mail)
+│   ├── persistence/        # *Entity, *Mapper e *PanacheRepository (isolam o JPA)
+│   └── security/           # Autenticação JWT, AppUser, seed inicial
 └── interfaces/
-    ├── rest/           # Recursos JAX-RS (endpoints REST)
-    └── exception/      # Mapeamento de exceções para HTTP
+    ├── rest/               # Recursos JAX-RS (endpoints REST)
+    └── exception/          # Mapeamento de exceções para HTTP
 ```
+
+**Direção das dependências:** `interfaces → application → domain` e
+`infrastructure → application → domain`. O domínio não importa nada de fora — verificável
+com `grep -r "^import \(jakarta\|io.quarkus\|org.hibernate\)" src/main/java/br/com/oficina/domain/`,
+que não retorna nada.
+
+As duas famílias de portas ficam lado a lado em `application.ports`: as de entrada
+devolvem DTOs de aplicação, então declará-las no domínio inverteria a dependência. Os
+adapters usam os repositórios Panache **por composição** — herdar `PanacheRepository`
+direto no adapter transformava ~40 métodos de persistência em API pública dele.
 
 ## Banco de Dados
 
@@ -253,8 +271,10 @@ As migrations são gerenciadas pelo **Flyway** (`src/main/resources/db/migration
 | JWT_PUBLIC_KEY_LOCATION     | keys/publicKey.pem  | Caminho da chave pública RSA                   |
 | CORS_ALLOWED_ORIGINS        | localhost:3000,8080 | Lista de origens permitidas (CSV)              |
 | APP_SEED_ENABLED            | true                | Se cria usuários iniciais (desabilite após)    |
-| APP_SEED_ADMIN_PASSWORD     | _gerada_            | Senha do admin (dono); vazia → senha aleatória |
-| APP_SEED_ATTENDANT_PASSWORD | _gerada_            | Senha da atendente; vazia → senha aleatória    |
+| APP_SEED_ADMIN_PASSWORD     | _gerada_            | Senha do admin; vazia → senha aleatória        |
+| APP_SEED_MECHANIC_PASSWORD  | _gerada_            | Senha do mecânico; vazia → senha aleatória     |
+| MAILER_HOST / MAILER_PORT   | localhost / 1025    | SMTP usado para notificar mudança de status    |
+| MAILER_FROM                 | nao-responda@…      | Remetente das notificações                     |
 
 ## Health Check
 
@@ -274,14 +294,17 @@ curl http://localhost:8080/q/health
 - Senhas armazenadas com **BCrypt** (custo 12, sem reversibilidade)
 - Tokens JWT assinados com **RSA-256** (chave 2048-bit)
 - Tokens expiram em **8 horas** (configurável via `JWT_EXPIRATION_HOURS`)
-- Endpoints administrativos requerem role `ADMIN` (dono) ou `ATTENDANT` (atendente);
-  exclusões, métricas e execução direta de ajuste de estoque/cancelamento de OS são
-  exclusivas de `ADMIN`
+- Endpoints administrativos requerem role `ADMIN` ou `MECHANIC`; exclusões, métricas e
+  ajuste direto de estoque/cancelamento de OS são exclusivos de `ADMIN`
+- Aprovação pública de orçamento exige **código de uso único** entregue só por e-mail
+  (CPF/CNPJ sozinho não autoriza — ver "Endpoints Públicos")
 - Comparação de senha em **tempo constante** evita _timing attacks_ que vazariam usuários válidos
 - Validação de CPF/CNPJ (com dígitos verificadores) no cadastro de clientes
 - Validação de placa de veículo (formato antigo e Mercosul)
 - CORS configurável por origem (sem `*` em produção)
-- Container Docker executa como **usuário não-root**
+- Container Docker executa como **usuário não-root com UID numérico (1001)**, e o
+  `securityContext` do Deployment reforça (`runAsNonRoot`, `readOnlyRootFilesystem`,
+  `allowPrivilegeEscalation: false`, `capabilities: drop [ALL]`, `seccomp: RuntimeDefault`)
 - Em ambiente `prod`, Swagger UI e OpenAPI são **desabilitados automaticamente**
 - Senhas iniciais não-hardcoded: se não configuradas, são geradas aleatoriamente e logadas uma única vez
 - `correlationId` em respostas 500 facilita troubleshooting sem expor stack trace ao cliente
@@ -300,10 +323,27 @@ curl http://localhost:8080/q/health
 | SmallRye OpenAPI      | —      | Documentação Swagger                    |
 | Hibernate Validator   | —      | Validação de beans                      |
 | H2                    | —      | Banco em memória para testes            |
+| Micrometer/Prometheus | —      | Métricas da aplicação em `/q/metrics`   |
 | JUnit 5               | —      | Testes unitários                        |
 | Mockito               | —      | Mocking para testes unitários           |
 | REST-Assured          | —      | Testes de integração REST               |
 | JaCoCo                | 0.8.13 | Cobertura de código                     |
+
+## Observabilidade
+
+| Recurso            | Endpoint      | Observação                                                    |
+|--------------------|---------------|---------------------------------------------------------------|
+| Liveness           | `/q/health/live`    | Usado pelo `livenessProbe` e pelo HEALTHCHECK do Docker |
+| Readiness          | `/q/health/ready`   | Inclui checagem da conexão com o banco                  |
+| Startup            | `/q/health/started` | Cobre a janela de boot (pool + Flyway) no `startupProbe`|
+| Métricas Prometheus| `/q/metrics`        | JVM, HTTP server e sistema, via Micrometer              |
+
+Em perfil `prod` o log do console sai em **JSON** (`quarkus.log.console.json`): com várias
+réplicas escrevendo no mesmo stdout, texto livre é impraticável de correlacionar.
+
+> O HPA usa o **metrics-server** (embarcado no k3s), que é independente do `/q/metrics`.
+> Confirme com `kubectl top pods -n oficina` antes de demonstrar o autoscaling — se a
+> métrica aparecer como `<unknown>`, o HPA não escala.
 
 ---
 
@@ -370,7 +410,6 @@ O documento cobre:
 > estados atual permite edição apenas em `RECEIVED`/`IN_DIAGNOSIS`).
 
 ---
-
 ## Fase 2 — Escalabilidade, Infraestrutura e Automação
 
 ### Objetivo da fase
@@ -378,13 +417,13 @@ O documento cobre:
 A Fase 1 entregou o MVP funcional (gestão de OS, clientes, veículos e peças). A Fase 2 evolui essa base
 para suportar operação real com múltiplas unidades e picos de demanda, sem alterar as regras de negócio:
 
-- **Refatoração arquitetural** — isolamento do domínio (`WorkOrder` como POJO puro, ports `in`/`out`
-  explícitos) reduzindo o acoplamento ao Quarkus/JPA, com testes automatizados cobrindo os fluxos críticos
-  (detalhe em [`docs/DDD.md`](docs/DDD.md) e `spec-hexagonal.md`).
+- **Refatoração arquitetural** — domínio sem nenhuma dependência de framework, ports `in`/`out`
+  explícitos na camada de aplicação e adapters por composição, com testes automatizados cobrindo os
+  fluxos críticos (detalhe em [`docs/DDD.md`](docs/DDD.md) e [`docs/spec-hexagonal.md`](docs/spec-hexagonal.md)).
 - **Conteinerização** consistente entre desenvolvimento local e produção (mesmo `Dockerfile` multi-stage).
 - **Orquestração via Kubernetes** com auto-scaling horizontal (HPA) reagindo a carga de CPU.
 - **Infraestrutura como código** (Terraform) provisionando cluster e banco de forma reprodutível.
-- **Pipeline de CI/CD** automatizando build, testes, build/push de imagem e deploy.
+- **Pipeline de CI/CD** automatizando build, testes, build/push de imagem, provisionamento e deploy.
 
 ### Arquitetura proposta
 
@@ -395,8 +434,9 @@ flowchart TB
     end
 
     subgraph AWS["AWS (provisionado via Terraform)"]
-        subgraph EC2["EC2 t3.medium — cluster k3s"]
-            SVC["Service (ClusterIP/NodePort)<br/>oficina-service"]
+        subgraph EC2["EC2 t3.medium — cluster k3s (single-node)"]
+            ING["Ingress (Traefik)<br/>oficina-ingress :80"]
+            SVC["Service ClusterIP<br/>oficina-service"]
             subgraph HPA["Deployment + HPA (2 a 4 réplicas, CPU 70%)"]
                 Pod1["Pod oficina-app #1"]
                 Pod2["Pod oficina-app #2"]
@@ -411,29 +451,33 @@ flowchart TB
 
     subgraph CICD["GitHub Actions (CI/CD)"]
         Build["build-test<br/>mvn verify"]
-        DockerJob["docker-build-push"]
+        TFCheck["terraform-check<br/>fmt + validate"]
+        DockerJob["docker-build-push<br/>+ scan Trivy"]
         TF["terraform-apply"]
         Deploy["deploy-k8s"]
         Smoke["smoke-test"]
     end
 
-    SMTP["Servidor SMTP<br/>(notificação de status)"]
+    SMTP["Servidor SMTP<br/>(status da OS + código de aprovação)"]
 
-    Browser -->|"HTTPS :8080"| SVC
+    Browser -->|"HTTP :80 (security group: só o CIDR do aluno)"| ING
+    ING --> SVC
     SVC --> Pod1
     SVC --> Pod2
     SVC --> PodN
     CM -.env.-> Pod1
-    SEC -.env/secret.-> Pod1
-    Pod1 -->|"JDBC"| RDS
+    SEC -.env/volume.-> Pod1
+    Pod1 -->|"JDBC :5432"| RDS
     Pod1 -->|"notificação de status"| SMTP
 
     Build --> DockerJob --> ECR
-    Build --> TF --> RDS
+    TFCheck --> TF
+    Build --> TF
+    TF -->|"outputs: rds_endpoint, ecr_url"| Deploy
+    TF --> RDS
     TF --> EC2
     DockerJob --> Deploy
-    TF --> Deploy
-    Deploy -->|"kubectl apply"| HPA
+    Deploy -->|"kubectl apply (via túnel SSM)"| HPA
     Deploy --> Smoke
     ECR -->|"pull da imagem"| Pod1
 
@@ -444,37 +488,73 @@ flowchart TB
 
 **Componentes da aplicação:** container único (`oficina-app`, Quarkus) expondo as APIs administrativas
 (`/admin/*`, autenticadas via JWT) e o canal público de acompanhamento (`/public/work-orders/*`, validado
-por CPF/CNPJ). Estado é 100% externalizado (PostgreSQL) — os pods são *stateless* e substituíveis, requisito
-para o HPA escalar horizontalmente sem afetar sessões em andamento.
+por CPF/CNPJ + código de uso único). Estado é 100% externalizado (PostgreSQL) — os pods são *stateless* e
+substituíveis, requisito para o HPA escalar horizontalmente sem afetar sessões em andamento. As chaves de
+assinatura do JWT vêm de um Secret montado como volume, para que **todas as réplicas assinem com o mesmo
+par** (do contrário, um token emitido por um pod seria rejeitado por outro).
 
 **Infraestrutura provisionada (Terraform, detalhe em [`infra/README.md`](infra/README.md)):**
 
-| Recurso            | Nome               | Observação                                      |
-|---------------------|--------------------|--------------------------------------------------|
-| VPC                 | `oficina-vpc`      | 1 subnet pública + 2 privadas, sem NAT Gateway   |
-| Cluster Kubernetes  | `oficina-k3s`      | k3s single-node em EC2 `t3.medium`               |
-| Banco de dados      | `oficina-postgres` | RDS PostgreSQL `db.t4g.micro`, single-AZ         |
-| Registro de imagem  | `oficina-app`      | ECR privado                                       |
+| Recurso            | Nome               | Observação                                                      |
+|--------------------|--------------------|-----------------------------------------------------------------|
+| VPC                | `oficina-vpc`      | 1 subnet pública + 2 privadas, sem NAT Gateway                  |
+| Cluster Kubernetes | `oficina-k3s`      | k3s single-node em EC2 `t3.medium`, disco criptografado, IMDSv2 |
+| Banco de dados     | `oficina-postgres` | RDS PostgreSQL `db.t4g.micro`, single-AZ, `storage_encrypted`   |
+| Registro de imagem | `oficina-app`      | ECR privado                                                     |
 
-> k3s (single-node) em vez de EKS gerenciado: custo e simplicidade adequados ao volume do desafio, mantendo
-> a API Kubernetes padrão — os manifestos em `/k8s` são portáveis para qualquer cluster gerenciado (EKS,
-> AKS, GKE) sem alteração. Justificativa completa em `spec-terraform-aws.md`.
+**Exposição da API:** o Ingress (Traefik, embarcado no k3s) publica a aplicação na porta 80 do node, e o
+security group libera essa porta **apenas para o CIDR informado em `allowed_cidr`**. A API do Kubernetes
+(6443) nunca é exposta: todo acesso administrativo, inclusive o da pipeline, passa por túnel do
+**SSM Session Manager**. A URL final sai em `terraform output application_url`.
 
-**Fluxo de deploy (pipeline `.github/workflows/ci-cd.yml`):**
+### Alta disponibilidade — o que esta entrega faz e o que não faz
 
-1. `build-test` — roda em todo push/PR: `mvn verify` (build + testes automatizados). Gate de qualidade antes
-   de qualquer publicação.
-2. `docker-build-push` *(manual — `workflow_dispatch`)* — build da imagem Docker e push para o ECR, tag pelo
-   SHA do commit + `latest`.
-3. `terraform-apply` *(manual)* — `terraform init/plan/apply` contra a AWS, provisionando/atualizando VPC,
-   EC2 (k3s), RDS e ECR.
-4. `deploy-k8s` *(manual, depende dos dois anteriores)* — busca o kubeconfig do node k3s via SSM (a API do
-   cluster nunca fica exposta publicamente), aplica `namespace`, `configmap`, gera os `Secrets` (DB, SMTP,
-   chaves JWT, credencial do ECR) a partir de GitHub Secrets, e aplica `deployment` + `service` + `hpa`.
-5. `smoke-test` — aguarda o rollout e valida `GET /q/health/live`.
+O enunciado pede "garantir alta disponibilidade". Vale ser explícito sobre o que foi entregue:
 
-Os estágios de infraestrutura (`docker-build-push`, `terraform-apply`, `deploy-k8s`) são restritos a disparo
-manual — evita `apply`/deploy automático contra uma conta AWS Academy de créditos limitados a cada push.
+| Dimensão                          | Situação                                                            |
+|-----------------------------------|---------------------------------------------------------------------|
+| Elasticidade sob pico             | ✅ HPA de 2 a 4 réplicas por CPU, com `behavior` calibrado           |
+| Rollout sem downtime              | ✅ `maxUnavailable: 0` + `maxSurge: 1`, probes de readiness/startup  |
+| Sobrevivência à queda de um pod   | ✅ 2 réplicas mínimas + PodDisruptionBudget                          |
+| Sobrevivência à queda do **node** | ❌ cluster **single-node** — o node é ponto único de falha           |
+| Sobrevivência à queda de uma AZ   | ❌ RDS single-AZ, sem réplica de leitura                             |
+
+Isso é uma **decisão consciente de custo**, não um esquecimento: o ambiente roda em conta AWS Academy com
+crédito único de US$50 para o curso inteiro. Um EKS gerenciado custa ~US$0,10/h só de control plane, e
+multi-AZ no RDS dobra o custo do banco — juntos consumiriam o orçamento em poucos dias de laboratório.
+
+O caminho para HA real, sem reescrever nada: os manifestos em `/k8s` são Kubernetes padrão e sobem
+inalterados em EKS/AKS/GKE. Bastaria (1) trocar o módulo de EC2+k3s por um cluster gerenciado multi-AZ com
+pelo menos 2 nodes, (2) `multi_az = true` no RDS com `backup_retention_period > 0`, e (3) acrescentar
+`topologySpreadConstraints` ao Deployment para distribuir as réplicas entre AZs. A justificativa completa
+da escolha está em [`docs/spec-terraform-aws.md`](docs/spec-terraform-aws.md).
+
+### Fluxo de deploy (pipeline `.github/workflows/ci-cd.yml`)
+
+Roda em **todo push e PR** (sem custo, sem credencial AWS):
+
+1. `build-test` — `mvn verify` (build + testes + gate de cobertura JaCoCo). Publica relatórios de testes e
+   de cobertura como artefatos da execução.
+2. `terraform-check` — `terraform fmt -check` e `terraform validate`, sem tocar na AWS.
+
+Roda **por push de tag `v*` ou disparo manual** (`workflow_dispatch`) — os estágios que custam dinheiro:
+
+3. `docker-build-push` — build da imagem com cache do BuildKit, **scan Trivy** (falha em CRITICAL com
+   correção disponível) e só então push para o ECR, com tag pelo SHA do commit + `latest`.
+4. `terraform-apply` — `init/plan/apply` provisionando VPC, EC2 (k3s), RDS e ECR. Exporta `rds_endpoint`,
+   `ecr_repository_url` e `application_url` como **outputs do job**, consumidos diretamente pelo deploy —
+   antes esses valores eram GitHub Secrets atualizados à mão a cada sessão, origem mais comum de deploy
+   quebrado, já que a infraestrutura é recriada do zero.
+5. `deploy-k8s` — obtém o kubeconfig via SSM, gera os Secrets (DB, SMTP, chaves JWT, credencial do ECR) a
+   partir de GitHub Secrets e aplica `namespace`, `configmap`, `deployment`, `service`, `ingress`, `hpa` e
+   `networkpolicy`. A imagem é fixada com `kubectl set image`. Se o rollout falhar, faz `rollout undo`
+   automático e despeja logs e eventos.
+6. `smoke-test` — valida `/q/health/live` e `/q/health/ready` pelo Service e, de dentro do node, o caminho
+   completo pelo Ingress. Em falha, reverte o deploy.
+
+> **Por que os estágios de infraestrutura não rodam em todo push na master:** cada `apply` recria EC2 e
+> RDS numa conta de crédito limitado. O gatilho por tag (`git tag v1.0.0 && git push --tags`) mantém o CD
+> automatizado, com um marco explícito de release, sem transformar cada commit em um deploy pago.
 
 ### Execução local
 
@@ -483,8 +563,9 @@ cd oficina
 docker-compose up --build -d
 ```
 
-Detalhes completos (variáveis de ambiente, chaves JWT, modo dev) na seção [Como Executar](#como-executar)
-acima.
+Sobe PostgreSQL, **Mailpit** (captura os e-mails em <http://localhost:8025> — é lá que aparece o código de
+aprovação do orçamento) e a aplicação em <http://localhost:8080>. Detalhes de variáveis de ambiente e modo
+dev na seção [Como Executar](#como-executar); passo a passo completo em [`docs/RUN-LOCAL.md`](docs/RUN-LOCAL.md).
 
 ### Deploy em Kubernetes
 
@@ -494,8 +575,9 @@ completo, incluindo geração dos `Secrets`, em [`k8s/README.md`](k8s/README.md)
 ```bash
 kubectl apply -f k8s/namespace.yaml -f k8s/configmap.yaml
 # Secrets (ECR, JWT, DB/SMTP) — ver k8s/README.md para os comandos completos
-kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/hpa.yaml
-kubectl get pods,hpa,svc -n oficina
+kubectl apply -f k8s/deployment.yaml -f k8s/service.yaml -f k8s/ingress.yaml \
+              -f k8s/hpa.yaml -f k8s/networkpolicy.yaml
+kubectl get pods,hpa,svc,ingress -n oficina
 ```
 
 ### Provisionamento da infraestrutura (Terraform)
@@ -508,28 +590,35 @@ cd infra
 terraform init
 terraform plan -out=tfplan
 terraform apply tfplan
+terraform output application_url
 ```
 
 > Ambiente roda em conta AWS Academy (créditos limitados por sessão). `terraform destroy` é obrigatório ao
-> final de cada sessão — ver [`SESSION-GUIDE.md`](SESSION-GUIDE.md).
+> final de cada sessão — ver [`docs/SESSION-GUIDE.md`](docs/SESSION-GUIDE.md).
 
 ### Collection de API
 
-- Swagger/OpenAPI (gerado automaticamente pelo Quarkus/SmallRye): `http://localhost:8080/swagger-ui` (ou
-  `http://<host>:8080/swagger-ui` no ambiente publicado) — especificação OpenAPI em
-  `http://localhost:8080/q/openapi`.
+- Swagger/OpenAPI (gerado automaticamente pelo Quarkus/SmallRye): `http://localhost:8080/swagger-ui` —
+  especificação OpenAPI em `http://localhost:8080/openapi`. Em perfil `prod` o Swagger fica
+  **desabilitado** por hardening; use a collection abaixo contra o ambiente publicado.
 - Collection Postman: [`postman/Oficina-Mecanica.postman_collection.json`](postman/Oficina-Mecanica.postman_collection.json).
 
 ### Vídeo demonstrativo
 
-[Link do vídeo](#) *(adicionar após a gravação — roteiro em `docs/ROTEIRO-VIDEO.md`)*.
+[Link do vídeo](#) *(adicionar após a gravação — roteiro em [`docs/ROTEIRO-VIDEO.md`](docs/ROTEIRO-VIDEO.md))*.
 
 ### Débito técnico conhecido (não bloqueia a entrega)
 
-- Cobertura de teste da Fase 1 ainda em aberto: teste de resiliência de notificação (`notifySafely` em
-  `WorkOrderService`) e testes de round-trip dos mappers (`Client`/`Vehicle`/`Part`/`ServiceItem`) — ver
-  `spec-test-unit.md`.
-- Entidades `Client`, `Vehicle`, `Part` e `ServiceItem` ainda são `@Entity` JPA (acopladas ao framework);
-  apenas `WorkOrder` segue o padrão POJO + mapper completo — ver `spec-hexagonal.md`.
-- Sem Testcontainers nos testes de integração (usam H2 em memória); RDS real só é validado no ambiente
-  provisionado.
+- **Sem Testcontainers** nos testes de integração (usam H2 em modo de compatibilidade PostgreSQL). O
+  comportamento específico do PostgreSQL — e o RDS real — só é exercido no ambiente provisionado.
+- **Cluster single-node e RDS single-AZ** — ver a seção de alta disponibilidade acima. É a lacuna
+  arquitetural mais relevante desta entrega, e é deliberada.
+- **NetworkPolicy inerte no k3s padrão**: o flannel embarcado não implementa NetworkPolicy. O manifesto
+  está versionado como estado desejado e passa a valer em qualquer CNI que a implemente (Calico/Cilium).
+- **Migrações no start do pod** (`migrate-at-start`): seguro, porque o Flyway serializa por advisory lock
+  do PostgreSQL, mas o padrão cloud-native seria um Job/initContainer dedicado.
+- **Sem rate limiting** nos endpoints públicos. O código de uso único mitiga a força bruta na aprovação de
+  orçamento, mas a consulta de status segue sem limite de requisições.
+- **Cobertura desigual nas bordas**: `interfaces.rest` e `infrastructure.adapters.out` ficam por volta de
+  70%, abaixo do restante. O gate do JaCoCo cobre domínio, value objects, serviços de aplicação,
+  validação, segurança, notificação e mapeamento de exceções.

@@ -1,8 +1,10 @@
 package br.com.oficina.domain.model;
 
 import br.com.oficina.domain.exception.BusinessException;
+import br.com.oficina.domain.exception.InvalidApprovalTokenException;
 import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
+import br.com.oficina.domain.valueobject.ApprovalToken;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -34,6 +36,8 @@ public class WorkOrder {
     private LocalDateTime finishedAt;
     private LocalDateTime deliveredAt;
     private LocalDateTime cancelledAt;
+    private ApprovalToken approvalToken;
+    private LocalDateTime approvalTokenConsumedAt;
     private final List<WorkOrderPart> parts = new ArrayList<>();
     private final List<WorkOrderServiceItem> services = new ArrayList<>();
 
@@ -56,7 +60,8 @@ public class WorkOrder {
             WorkOrderStatus status, String notes, BigDecimal totalCost, LocalDateTime createdAt,
             LocalDateTime diagnosisStartedAt, LocalDateTime sentForApprovalAt, LocalDateTime approvedAt,
             LocalDateTime executionStartedAt, LocalDateTime finishedAt, LocalDateTime deliveredAt,
-            LocalDateTime cancelledAt, List<WorkOrderPart> parts, List<WorkOrderServiceItem> services) {
+            LocalDateTime cancelledAt, String approvalToken, LocalDateTime approvalTokenConsumedAt,
+            List<WorkOrderPart> parts, List<WorkOrderServiceItem> services) {
         WorkOrder wo = new WorkOrder();
         wo.id = id;
         wo.orderNumber = orderNumber;
@@ -73,6 +78,8 @@ public class WorkOrder {
         wo.finishedAt = finishedAt;
         wo.deliveredAt = deliveredAt;
         wo.cancelledAt = cancelledAt;
+        wo.approvalToken = approvalToken == null ? null : new ApprovalToken(approvalToken);
+        wo.approvalTokenConsumedAt = approvalTokenConsumedAt;
         if (parts != null) wo.parts.addAll(parts);
         if (services != null) wo.services.addAll(services);
         return wo;
@@ -147,11 +154,47 @@ public class WorkOrder {
         diagnosisStartedAt = LocalDateTime.now();
     }
 
+    /**
+     * Envia o orçamento para aprovação e emite um token de uso único que autoriza
+     * o cliente a decidir pelo canal público. O token é reemitido a cada envio —
+     * um reenvio invalida o link anterior.
+     */
     public void sendForApproval() {
         requireStatus(WorkOrderStatus.IN_DIAGNOSIS);
         recalculateTotalCost();
         status = WorkOrderStatus.AWAITING_APPROVAL;
         sentForApprovalAt = LocalDateTime.now();
+        approvalToken = ApprovalToken.generate();
+        approvalTokenConsumedAt = null;
+    }
+
+    /** Aprovação remota do cliente: exige o token enviado por e-mail e o invalida. */
+    public void approveWithToken(String candidateToken) {
+        consumeApprovalToken(candidateToken);
+        approve();
+    }
+
+    /** Recusa remota do cliente: exige o token enviado por e-mail e o invalida. */
+    public void rejectWithToken(String candidateToken) {
+        consumeApprovalToken(candidateToken);
+        reject();
+    }
+
+    /**
+     * Valida e queima o token. Um token já usado devolve erro de negócio explícito
+     * (o cliente clicou duas vezes no link); token ausente ou divergente devolve o
+     * erro genérico de "não encontrado", para não confirmar a existência da OS.
+     */
+    private void consumeApprovalToken(String candidateToken) {
+        if (approvalToken == null || !approvalToken.matches(candidateToken)) {
+            throw new InvalidApprovalTokenException(
+                "Ordem de Serviço não encontrada ou link de aprovação inválido.");
+        }
+        if (approvalTokenConsumedAt != null) {
+            throw new BusinessException(
+                "Este link de aprovação já foi utilizado. Solicite um novo à oficina.");
+        }
+        approvalTokenConsumedAt = LocalDateTime.now();
     }
 
     public void approve() {
@@ -235,6 +278,9 @@ public class WorkOrder {
     public LocalDateTime getFinishedAt() { return finishedAt; }
     public LocalDateTime getDeliveredAt() { return deliveredAt; }
     public LocalDateTime getCancelledAt() { return cancelledAt; }
+    /** Token de aprovação vigente, ou {@code null} se a OS nunca foi enviada para aprovação. */
+    public String getApprovalToken() { return approvalToken == null ? null : approvalToken.value(); }
+    public LocalDateTime getApprovalTokenConsumedAt() { return approvalTokenConsumedAt; }
     public List<WorkOrderPart> getParts() { return Collections.unmodifiableList(parts); }
     public List<WorkOrderServiceItem> getServices() { return Collections.unmodifiableList(services); }
 }

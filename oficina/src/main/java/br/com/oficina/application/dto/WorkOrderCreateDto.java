@@ -1,6 +1,6 @@
 package br.com.oficina.application.dto;
 
-import br.com.oficina.infrastructure.validation.ValidCpfCnpj;
+import br.com.oficina.application.validation.ValidCpfCnpj;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

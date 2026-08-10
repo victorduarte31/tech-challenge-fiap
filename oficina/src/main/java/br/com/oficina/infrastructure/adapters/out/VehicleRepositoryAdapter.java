@@ -2,10 +2,10 @@ package br.com.oficina.infrastructure.adapters.out;
 
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Vehicle;
-import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
+import br.com.oficina.application.ports.out.VehicleRepositoryPort;
 import br.com.oficina.infrastructure.persistence.VehicleEntity;
 import br.com.oficina.infrastructure.persistence.VehicleMapper;
-import io.quarkus.hibernate.orm.panache.PanacheRepository;
+import br.com.oficina.infrastructure.persistence.VehiclePanacheRepository;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -15,37 +15,40 @@ import java.util.Optional;
 
 /**
  * Adapter de persistência do aggregate {@code Vehicle}. Opera sobre
- * {@code VehicleEntity} via Panache e expõe à aplicação apenas o domínio puro,
+ * {@code VehicleEntity} via Panache (por composição) e expõe à aplicação apenas o domínio puro,
  * traduzido pelo {@link VehicleMapper}.
  */
 @ApplicationScoped
-public class VehicleRepositoryAdapter implements VehicleRepositoryPort, PanacheRepository<VehicleEntity> {
+public class VehicleRepositoryAdapter implements VehicleRepositoryPort {
 
     @Inject
     VehicleMapper mapper;
 
+    @Inject
+    VehiclePanacheRepository repository;
+
     @Override
     public List<Vehicle> listAll(int page, int size) {
-        return findAll(Sort.by("id")).page(Page.of(page, size)).list().stream()
+        return repository.findAll(Sort.by("id")).page(Page.of(page, size)).list().stream()
             .map(mapper::toDomain)
             .toList();
     }
 
     @Override
     public Optional<Vehicle> fetchById(Long id) {
-        return findByIdOptional(id).map(mapper::toDomain);
+        return repository.findByIdOptional(id).map(mapper::toDomain);
     }
 
     @Override
     public List<Vehicle> findByClientId(Long clientId) {
-        return list("client.id", clientId).stream()
+        return repository.list("client.id", clientId).stream()
             .map(mapper::toDomain)
             .toList();
     }
 
     @Override
     public boolean existsByLicensePlate(String licensePlate) {
-        return count("licensePlate", licensePlate) > 0;
+        return repository.count("licensePlate", licensePlate) > 0;
     }
 
     @Override
@@ -53,20 +56,25 @@ public class VehicleRepositoryAdapter implements VehicleRepositoryPort, PanacheR
         VehicleEntity entity;
         if (vehicle.getId() == null) {
             entity = mapper.toNewEntity(vehicle);
-            persist(entity);
+            repository.persist(entity);
         } else {
-            entity = findById(vehicle.getId());
+            entity = repository.findById(vehicle.getId());
             if (entity == null) {
                 throw new ResourceNotFoundException("Veículo", vehicle.getId());
             }
             mapper.applyState(entity, vehicle);
         }
-        flush();
+        repository.flush();
         return mapper.toDomain(entity);
     }
 
     @Override
+    public long countAll() {
+        return repository.count();
+    }
+
+    @Override
     public void removeById(Long id) {
-        deleteById(id);
+        repository.deleteById(id);
     }
 }

@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -39,9 +40,12 @@ class EmailNotificationAdapterTest {
         adapter.mailer = mailer;
     }
 
+    private static final String APPROVAL_TOKEN = "tok3n-de-aprovacao-de-uso-unico";
+
     private static WorkOrderStatusChangedEvent event(WorkOrderStatus status, String email) {
         return new WorkOrderStatusChangedEvent(
-            "OS-000001", status, "Maria", email, "Toyota Corolla (ABC1D23)", new BigDecimal("250.00"));
+            "OS-000001", status, "Maria", email, "Toyota Corolla (ABC1D23)",
+            new BigDecimal("250.00"), APPROVAL_TOKEN);
     }
 
     @Test
@@ -54,6 +58,19 @@ class EmailNotificationAdapterTest {
         assertThat(mail.getTo()).containsExactly("maria@x.com");
         assertThat(mail.getSubject()).contains("OS-000001").contains("aprovação");
         assertThat(mail.getText()).contains("Maria").contains("250.00");
+        // O e-mail é o único canal por onde o código de autorização chega ao cliente
+        assertThat(mail.getText()).contains(APPROVAL_TOKEN);
+    }
+
+    @Test
+    void finishedAndDeliveredEmails_shouldNotLeakApprovalToken() {
+        adapter.notifyStatusChange(event(WorkOrderStatus.FINISHED, "maria@x.com"));
+        adapter.notifyStatusChange(event(WorkOrderStatus.DELIVERED, "maria@x.com"));
+
+        ArgumentCaptor<Mail> captor = ArgumentCaptor.forClass(Mail.class);
+        verify(mailer, times(2)).send(captor.capture());
+        assertThat(captor.getAllValues())
+            .allSatisfy(mail -> assertThat(mail.getText()).doesNotContain(APPROVAL_TOKEN));
     }
 
     @Test

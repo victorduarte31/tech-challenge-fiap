@@ -48,7 +48,7 @@ public class WorkOrderMapper {
             e.getId(), e.getOrderNumber(), customer, vehicle, e.getStatus(), e.getNotes(),
             e.getTotalCost(), e.getCreatedAt(), e.getDiagnosisStartedAt(), e.getSentForApprovalAt(),
             e.getApprovedAt(), e.getExecutionStartedAt(), e.getFinishedAt(), e.getDeliveredAt(),
-            e.getCancelledAt(), parts, services);
+            e.getCancelledAt(), e.getApprovalToken(), e.getApprovalTokenConsumedAt(), parts, services);
     }
 
     public WorkOrderEntity toNewEntity(WorkOrder d) {
@@ -72,6 +72,8 @@ public class WorkOrderMapper {
         e.setFinishedAt(d.getFinishedAt());
         e.setDeliveredAt(d.getDeliveredAt());
         e.setCancelledAt(d.getCancelledAt());
+        e.setApprovalToken(d.getApprovalToken());
+        e.setApprovalTokenConsumedAt(d.getApprovalTokenConsumedAt());
         reconcileParts(e, d);
         reconcileServices(e, d);
     }

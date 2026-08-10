@@ -14,6 +14,11 @@ public interface ListWorkOrdersUseCase {
 
     List<WorkOrderResponseDto> listByStatus(WorkOrderStatus status, int page, int size);
 
+    /** Total de OS ativas, para o cabeçalho {@code X-Total-Count} da listagem. */
+    long countActive();
+
+    long countByStatus(WorkOrderStatus status);
+
     WorkOrderResponseDto findById(Long id);
 
     WorkOrderResponseDto findByOrderNumber(String orderNumber);

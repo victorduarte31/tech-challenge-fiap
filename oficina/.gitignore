@@ -19,4 +19,11 @@ keys/publicKey.pem
 **/tfplan
 infra/.terraform/
 infra/*.pem
-infra/kubeconfig
+
+# Kubeconfig e artefatos efêmeros de acesso ao cluster — contêm credenciais do k3s
+# (CA + client-cert/key) ou são lixo de patch gerado a cada sessão. Nunca commitar.
+# Regras amplas para pegar kubeconfig, kubeconfig-raw, kubeconfig-local, *-patch.json, patch.json.
+**/kubeconfig
+**/kubeconfig-*
+**/patch.json
+**/*-patch.json

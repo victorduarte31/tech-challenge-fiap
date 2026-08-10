@@ -11,13 +11,13 @@ import br.com.oficina.domain.event.WorkOrderStatusChangedEvent;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.*;
-import br.com.oficina.domain.ports.out.ClientRepositoryPort;
-import br.com.oficina.domain.ports.out.NotificationGatewayPort;
-import br.com.oficina.domain.ports.out.PartRepositoryPort;
-import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
-import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
-import br.com.oficina.domain.ports.out.WorkOrderRepositoryPort;
-import br.com.oficina.infrastructure.validation.CpfCnpjUtils;
+import br.com.oficina.application.ports.out.ClientRepositoryPort;
+import br.com.oficina.application.ports.out.NotificationGatewayPort;
+import br.com.oficina.application.ports.out.PartRepositoryPort;
+import br.com.oficina.application.ports.out.ServiceItemRepositoryPort;
+import br.com.oficina.application.ports.out.VehicleRepositoryPort;
+import br.com.oficina.application.ports.out.WorkOrderRepositoryPort;
+import br.com.oficina.domain.valueobject.CpfCnpj;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
@@ -69,6 +69,18 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
 
     @Override
     @Transactional(TxType.SUPPORTS)
+    public long countActive() {
+        return workOrderRepository.countActive();
+    }
+
+    @Override
+    @Transactional(TxType.SUPPORTS)
+    public long countByStatus(WorkOrderStatus status) {
+        return workOrderRepository.countByStatus(status);
+    }
+
+    @Override
+    @Transactional(TxType.SUPPORTS)
     public WorkOrderResponseDto findById(Long id) {
         return WorkOrderResponseDto.from(findWorkOrder(id));
     }
@@ -86,7 +98,7 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
     @Override
     @Transactional
     public WorkOrderResponseDto create(WorkOrderCreateDto dto) {
-        String normalizedCpfCnpj = CpfCnpjUtils.normalize(dto.clientCpfCnpj());
+        String normalizedCpfCnpj = CpfCnpj.normalize(dto.clientCpfCnpj());
         Client client = clientRepository.findByCpfCnpj(normalizedCpfCnpj)
             .orElseThrow(() -> new ResourceNotFoundException(
                 "Cliente não encontrado com CPF/CNPJ: " + dto.clientCpfCnpj()
@@ -215,27 +227,35 @@ public class WorkOrderService implements CreateWorkOrderUseCase, ManageWorkOrder
 
     @Override
     @Transactional
-    public WorkOrderResponseDto approveByOrderNumber(String orderNumber, String clientCpfCnpj) {
+    public WorkOrderResponseDto approveByOrderNumber(String orderNumber, String clientCpfCnpj,
+                                                     String approvalToken) {
         WorkOrder wo = findAndAuthorize(orderNumber, clientCpfCnpj);
-        wo.approve();
+        wo.approveWithToken(approvalToken);
         return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
     @Override
     @Transactional
-    public WorkOrderResponseDto rejectByOrderNumber(String orderNumber, String clientCpfCnpj) {
+    public WorkOrderResponseDto rejectByOrderNumber(String orderNumber, String clientCpfCnpj,
+                                                    String approvalToken) {
         WorkOrder wo = findAndAuthorize(orderNumber, clientCpfCnpj);
-        wo.reject();
+        wo.rejectWithToken(approvalToken);
         restoreStockOfAllParts(wo);
         return WorkOrderResponseDto.from(workOrderRepository.save(wo));
     }
 
+    /**
+     * Primeira barreira do canal público: localiza a OS e confere o CPF/CNPJ. A
+     * segunda barreira — o código de uso único enviado por e-mail — é validada
+     * dentro do aggregate, junto da transição de estado, para que não exista
+     * caminho de aprovação que a contorne.
+     */
     private WorkOrder findAndAuthorize(String orderNumber, String providedCpfCnpj) {
         WorkOrder wo = workOrderRepository.findByOrderNumber(orderNumber)
             .orElseThrow(() -> new ResourceNotFoundException(
                 "Ordem de Serviço não encontrada: " + orderNumber));
 
-        String normalized = CpfCnpjUtils.normalize(providedCpfCnpj);
+        String normalized = CpfCnpj.normalize(providedCpfCnpj);
         if (!wo.getCustomer().cpfCnpj().equals(normalized)) {
             // Mensagem genérica para não distinguir "OS inexistente" de "CPF/CNPJ não confere"
             throw new ResourceNotFoundException("Ordem de Serviço não encontrada: " + orderNumber);

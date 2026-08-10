@@ -17,7 +17,8 @@ public record WorkOrderStatusChangedEvent(
     String customerName,
     String customerEmail,
     String vehicleDescription,
-    BigDecimal totalCost
+    BigDecimal totalCost,
+    String approvalToken
 ) {
 
     public static WorkOrderStatusChangedEvent of(WorkOrder workOrder) {
@@ -29,7 +30,8 @@ public record WorkOrderStatusChangedEvent(
             workOrder.getCustomer().name(),
             workOrder.getCustomer().email(),
             vehicle,
-            workOrder.getTotalCost()
+            workOrder.getTotalCost(),
+            workOrder.getApprovalToken()
         );
     }
 }

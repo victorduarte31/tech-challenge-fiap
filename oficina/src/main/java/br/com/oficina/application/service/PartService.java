@@ -6,7 +6,7 @@ import br.com.oficina.application.dto.PartResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Part;
-import br.com.oficina.domain.ports.out.PartRepositoryPort;
+import br.com.oficina.application.ports.out.PartRepositoryPort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -25,6 +25,11 @@ public class PartService {
         return partRepository.listActive(Pagination.page(page), Pagination.cap(size)).stream()
             .map(PartResponseDto::from)
             .toList();
+    }
+
+    /** Total de peças ativas, para o cabeçalho X-Total-Count. */
+    public long countActive() {
+        return partRepository.countActive();
     }
 
     public PartResponseDto findById(Long id) {

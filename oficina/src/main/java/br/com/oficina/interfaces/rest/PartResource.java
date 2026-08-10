@@ -30,10 +30,13 @@ public class PartResource {
     }
 
     @GET
-    @Operation(summary = "Listar peças/insumos ativos (paginado)")
-    public List<PartResponseDto> listAll(@QueryParam("page") @DefaultValue("0") int page,
-                                         @QueryParam("size") @DefaultValue("20") int size) {
-        return partService.listAll(page, size);
+    @Operation(summary = "Listar peças/insumos ativos (paginado)",
+               description = "Total de registros, ignorando a paginação, no cabeçalho X-Total-Count.")
+    public Response listAll(@QueryParam("page") @DefaultValue("0") int page,
+                            @QueryParam("size") @DefaultValue("20") int size) {
+        return Response.ok(partService.listAll(page, size))
+            .header(WorkOrderResource.TOTAL_COUNT_HEADER, partService.countActive())
+            .build();
     }
 
     @GET

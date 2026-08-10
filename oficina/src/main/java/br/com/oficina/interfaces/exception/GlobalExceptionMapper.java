@@ -1,6 +1,7 @@
 package br.com.oficina.interfaces.exception;
 
 import br.com.oficina.domain.exception.BusinessException;
+import br.com.oficina.domain.exception.InvalidApprovalTokenException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -22,6 +23,9 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
     public Response toResponse(Throwable exception) {
         return switch (exception) {
             case ResourceNotFoundException e -> errorResponse(Response.Status.NOT_FOUND, e.getMessage());
+            // Antes de BusinessException (da qual herda): token inválido responde 404 com a
+            // mesma mensagem de OS inexistente, para não virar oráculo de enumeração de OS.
+            case InvalidApprovalTokenException e -> errorResponse(Response.Status.NOT_FOUND, e.getMessage());
             case BusinessException e -> errorResponse(UNPROCESSABLE_ENTITY,
                 "Unprocessable Entity", e.getMessage());
             case IllegalArgumentException e -> errorResponse(Response.Status.BAD_REQUEST, e.getMessage());

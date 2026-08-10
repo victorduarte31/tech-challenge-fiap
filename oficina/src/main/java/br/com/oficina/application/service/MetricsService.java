@@ -1,8 +1,8 @@
 package br.com.oficina.application.service;
 
 import br.com.oficina.application.dto.MetricsResponseDto;
-import br.com.oficina.domain.ports.out.PartRepositoryPort;
-import br.com.oficina.domain.ports.out.WorkOrderRepositoryPort;
+import br.com.oficina.application.ports.out.PartRepositoryPort;
+import br.com.oficina.application.ports.out.WorkOrderRepositoryPort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;

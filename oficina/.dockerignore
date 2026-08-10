@@ -6,3 +6,15 @@ docs/
 *.log
 .idea/
 *.iml
+
+# Nada abaixo entra na imagem — o build só precisa de pom.xml, src/ e do entrypoint.
+# Explicitar reduz o contexto enviado ao daemon e, no caso de keys/ e *.pem, evita
+# que uma chave privada local vá parar numa camada por um COPY futuro descuidado.
+keys/
+*.pem
+infra/
+k8s/
+postman/
+.mvn/
+.dockerignore
+docker-compose.yml

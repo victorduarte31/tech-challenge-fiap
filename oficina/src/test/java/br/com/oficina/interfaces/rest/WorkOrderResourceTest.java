@@ -1,9 +1,15 @@
 package br.com.oficina.interfaces.rest;
 
+import io.quarkus.mailer.MockMailbox;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.*;
+
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -11,6 +17,24 @@ import static org.hamcrest.Matchers.*;
 @QuarkusTest
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class WorkOrderResourceTest {
+
+    private static final String CLIENT_EMAIL = "pedro@test.com";
+    private static final Pattern TOKEN_IN_EMAIL = Pattern.compile("Código de autorização: (\\S+)");
+
+    @Inject
+    MockMailbox mailbox;
+
+    /**
+     * Lê o código de autorização do e-mail enviado ao cliente — único canal por
+     * onde ele é entregue. Reproduz o que o cliente faz ao receber o orçamento.
+     */
+    private String approvalTokenFromEmail() {
+        List<io.vertx.ext.mail.MailMessage> messages = mailbox.getMailMessagesSentTo(CLIENT_EMAIL);
+        Assertions.assertFalse(messages.isEmpty(), "nenhum e-mail enviado ao cliente");
+        Matcher matcher = TOKEN_IN_EMAIL.matcher(messages.getLast().getText());
+        Assertions.assertTrue(matcher.find(), "código de autorização ausente no e-mail");
+        return matcher.group(1);
+    }
 
     private static Long clientId;
     private static Long vehicleId;
@@ -192,7 +216,8 @@ class WorkOrderResourceTest {
     void publicApprove_withWrongCpfCnpj_shouldReturn404() {
         given()
             .contentType(ContentType.JSON)
-            .body("{\"clientCpfCnpj\": \"529.982.247-25\"}")
+            .body("{\"clientCpfCnpj\": \"529.982.247-25\", \"approvalToken\": \""
+                  + approvalTokenFromEmail() + "\"}")
             .when().post("/public/work-orders/" + workOrderNumber + "/approve")
             .then()
             .statusCode(404);
@@ -200,10 +225,11 @@ class WorkOrderResourceTest {
 
     @Test
     @Order(12)
-    void publicApprove_withMatchingCpfCnpj_shouldChangeStatusToInExecution() {
+    void publicApprove_withMatchingCpfCnpjAndToken_shouldChangeStatusToInExecution() {
         given()
             .contentType(ContentType.JSON)
-            .body("{\"clientCpfCnpj\": \"356.492.810-33\"}")
+            .body("{\"clientCpfCnpj\": \"356.492.810-33\", \"approvalToken\": \""
+                  + approvalTokenFromEmail() + "\"}")
             .when().post("/public/work-orders/" + workOrderNumber + "/approve")
             .then()
             .statusCode(200)
@@ -233,19 +259,43 @@ class WorkOrderResourceTest {
             .body("status", equalTo("DELIVERED"));
     }
 
+    /**
+     * Exclusão lógica: a OS entregue sai da fila ativa, mas continua consultável
+     * pelo filtro explícito de status. O total sem paginação vem no X-Total-Count.
+     */
     @Test
     @Order(15)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
-    void listAll_shouldIncludeCreatedOrder() {
+    void listActive_shouldExcludeDeliveredOrderButKeepItQueryableByStatus() {
         given()
             .when().get("/admin/work-orders")
             .then()
             .statusCode(200)
-            .body("$", hasSize(greaterThan(0)));
+            .header("X-Total-Count", notNullValue())
+            .body("orderNumber", not(hasItem(workOrderNumber)));
+
+        given()
+            .when().get("/admin/work-orders?status=DELIVERED")
+            .then()
+            .statusCode(200)
+            .header("X-Total-Count", notNullValue())
+            .body("orderNumber", hasItem(workOrderNumber));
+    }
+
+    /** Estados terminais (FINISHED/DELIVERED/CANCELLED) nunca aparecem na fila ativa. */
+    @Test
+    @Order(16)
+    @TestSecurity(user = "admin", roles = {"ADMIN"})
+    void listActive_shouldNeverContainTerminalStatuses() {
+        given()
+            .when().get("/admin/work-orders?size=100")
+            .then()
+            .statusCode(200)
+            .body("status", everyItem(not(in(List.of("FINISHED", "DELIVERED", "CANCELLED")))));
     }
 
     @Test
-    @Order(16)
+    @Order(17)
     @TestSecurity(user = "admin", roles = {"ADMIN"})
     void getMetrics_shouldReturnValidData() {
         given()

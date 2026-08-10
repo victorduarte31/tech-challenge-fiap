@@ -2,16 +2,17 @@ package br.com.oficina.application.service;
 
 import br.com.oficina.application.dto.*;
 import br.com.oficina.domain.exception.BusinessException;
+import br.com.oficina.domain.exception.InvalidApprovalTokenException;
 import br.com.oficina.domain.exception.InvalidStatusTransitionException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.event.WorkOrderStatusChangedEvent;
 import br.com.oficina.domain.model.*;
-import br.com.oficina.domain.ports.out.ClientRepositoryPort;
-import br.com.oficina.domain.ports.out.NotificationGatewayPort;
-import br.com.oficina.domain.ports.out.PartRepositoryPort;
-import br.com.oficina.domain.ports.out.ServiceItemRepositoryPort;
-import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
-import br.com.oficina.domain.ports.out.WorkOrderRepositoryPort;
+import br.com.oficina.application.ports.out.ClientRepositoryPort;
+import br.com.oficina.application.ports.out.NotificationGatewayPort;
+import br.com.oficina.application.ports.out.PartRepositoryPort;
+import br.com.oficina.application.ports.out.ServiceItemRepositoryPort;
+import br.com.oficina.application.ports.out.VehicleRepositoryPort;
+import br.com.oficina.application.ports.out.WorkOrderRepositoryPort;
 import br.com.oficina.testsupport.DomainTestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -321,37 +322,95 @@ class WorkOrderServiceTest {
         assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.CANCELLED);
     }
 
+    /** Leva a OS até AWAITING_APPROVAL pelo fluxo real e devolve o token emitido. */
+    private String sendForApprovalAndCaptureToken() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
+        workOrder.sendForApproval();
+        return workOrder.getApprovalToken();
+    }
+
     @Test
-    void approveByOrderNumber_withMatchingCpfCnpj_shouldApprove() {
-        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+    void approveByOrderNumber_withMatchingCpfCnpjAndToken_shouldApprove() {
+        String token = sendForApprovalAndCaptureToken();
         when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
 
-        WorkOrderResponseDto result = workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35");
+        WorkOrderResponseDto result =
+            workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35", token);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.IN_EXECUTION);
     }
 
     @Test
     void approveByOrderNumber_withWrongCpfCnpj_shouldThrowNotFound() {
-        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        String token = sendForApprovalAndCaptureToken();
         when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
 
-        assertThatThrownBy(() -> workOrderService.approveByOrderNumber("OS-000001", "529.982.247-25"))
+        assertThatThrownBy(() -> workOrderService.approveByOrderNumber("OS-000001", "529.982.247-25", token))
             .isInstanceOf(ResourceNotFoundException.class);
         // Status não pode ter mudado
         assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
     }
 
     @Test
-    void rejectByOrderNumber_withMatchingCpfCnpj_shouldRejectAndRestoreStock() {
+    void approveByOrderNumber_withWrongToken_shouldThrowNotFoundWithoutRevealingTheOrder() {
+        sendForApprovalAndCaptureToken();
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        assertThatThrownBy(() ->
+            workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35", "token-chutado"))
+            .isInstanceOf(InvalidApprovalTokenException.class);
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    void approveByOrderNumber_withoutTokenIssued_shouldThrowInvalidToken() {
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        assertThatThrownBy(() ->
+            workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35", "qualquer-coisa"))
+            .isInstanceOf(InvalidApprovalTokenException.class);
+    }
+
+    @Test
+    void approveByOrderNumber_reusingTheSameToken_shouldBeRejected() {
+        String token = sendForApprovalAndCaptureToken();
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35", token);
+
+        assertThatThrownBy(() ->
+            workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35", token))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("já foi utilizado");
+    }
+
+    @Test
+    void sendForApproval_calledTwice_shouldInvalidateThePreviousToken() {
+        String firstToken = sendForApprovalAndCaptureToken();
+
+        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
+        workOrder.sendForApproval();
+        String secondToken = workOrder.getApprovalToken();
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        assertThat(secondToken).isNotEqualTo(firstToken);
+        assertThatThrownBy(() ->
+            workOrderService.approveByOrderNumber("OS-000001", "111.444.777-35", firstToken))
+            .isInstanceOf(InvalidApprovalTokenException.class);
+    }
+
+    @Test
+    void rejectByOrderNumber_withMatchingCpfCnpjAndToken_shouldRejectAndRestoreStock() {
         DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.IN_DIAGNOSIS);
         when(workOrderRepository.fetchById(1L)).thenReturn(Optional.of(workOrder));
         when(partRepository.fetchById(1L)).thenReturn(Optional.of(part));
         workOrderService.addPart(1L, new WorkOrderPartDto(1L, 3));
-        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        String token = sendForApprovalAndCaptureToken();
         when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
 
-        WorkOrderResponseDto result = workOrderService.rejectByOrderNumber("OS-000001", "11144477735");
+        WorkOrderResponseDto result =
+            workOrderService.rejectByOrderNumber("OS-000001", "11144477735", token);
 
         assertThat(result.status()).isEqualTo(WorkOrderStatus.CANCELLED);
         assertThat(part.getStockQuantity()).isEqualTo(10);
@@ -359,11 +418,22 @@ class WorkOrderServiceTest {
 
     @Test
     void rejectByOrderNumber_withWrongCpfCnpj_shouldThrowNotFound() {
-        DomainTestFixtures.setField(workOrder, "status", WorkOrderStatus.AWAITING_APPROVAL);
+        String token = sendForApprovalAndCaptureToken();
         when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
 
-        assertThatThrownBy(() -> workOrderService.rejectByOrderNumber("OS-000001", "529.982.247-25"))
+        assertThatThrownBy(() -> workOrderService.rejectByOrderNumber("OS-000001", "529.982.247-25", token))
             .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
+    }
+
+    @Test
+    void rejectByOrderNumber_withWrongToken_shouldNotCancelTheOrder() {
+        sendForApprovalAndCaptureToken();
+        when(workOrderRepository.findByOrderNumber("OS-000001")).thenReturn(Optional.of(workOrder));
+
+        assertThatThrownBy(() ->
+            workOrderService.rejectByOrderNumber("OS-000001", "11144477735", "token-chutado"))
+            .isInstanceOf(InvalidApprovalTokenException.class);
         assertThat(workOrder.getStatus()).isEqualTo(WorkOrderStatus.AWAITING_APPROVAL);
     }
 

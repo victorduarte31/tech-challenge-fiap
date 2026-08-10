@@ -2,7 +2,7 @@ resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Name = "${var.project_name}-vpc", Project = var.project_name }
+  tags                 = { Name = "${var.project_name}-vpc" }
 }
 
 resource "aws_internet_gateway" "main" {
@@ -16,7 +16,7 @@ resource "aws_subnet" "public" {
   cidr_block              = "10.0.1.0/24"
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
-  tags = { Name = "${var.project_name}-public" }
+  tags                    = { Name = "${var.project_name}-public" }
 }
 
 # Subnets privadas — só existem para satisfazer a exigência de 2 AZs do aws_db_subnet_group (rds.tf).
@@ -26,14 +26,14 @@ resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.11.0/24"
   availability_zone = data.aws_availability_zones.available.names[0]
-  tags = { Name = "${var.project_name}-private-a" }
+  tags              = { Name = "${var.project_name}-private-a" }
 }
 
 resource "aws_subnet" "private_b" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.0.12.0/24"
   availability_zone = data.aws_availability_zones.available.names[1]
-  tags = { Name = "${var.project_name}-private-b" }
+  tags              = { Name = "${var.project_name}-private-b" }
 }
 
 resource "aws_route_table" "public" {

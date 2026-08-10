@@ -55,8 +55,14 @@ public class DataSeeder {
         }
         String password = configuredPassword.filter(p -> !p.isBlank()).orElseGet(() -> {
             String generated = generateRandomPassword();
-            LOG.warnf("[SEED] Senha não configurada para '%s'. Senha gerada (anote e altere): %s",
-                username, generated);
+            // Trade-off consciente: a senha vai para o log (e daí para o stdout do pod
+            // e qualquer coletor a jusante). É o preço de não ter um gerenciador de
+            // segredos no escopo do desafio — sem isto, um ambiente novo ficaria sem
+            // nenhuma credencial utilizável. O caminho recomendado é sempre definir
+            // APP_SEED_*_PASSWORD via Secret e desligar o seed (APP_SEED_ENABLED=false)
+            // após o primeiro start; aí este ramo nunca executa.
+            LOG.warnf("[SEED] Senha não configurada para '%s'. Senha gerada (anote, altere e "
+                    + "desabilite o seed): %s", username, generated);
             return generated;
         });
 

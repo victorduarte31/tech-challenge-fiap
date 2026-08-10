@@ -1,4 +1,4 @@
-package br.com.oficina.domain.ports.out;
+package br.com.oficina.application.ports.out;
 
 import br.com.oficina.domain.model.Client;
 import java.util.List;
@@ -6,7 +6,8 @@ import java.util.Optional;
 
 /**
  * Porta de saída (driven port) para persistência do aggregate {@code Client}.
- * Definida no domínio; implementada por um adapter na infraestrutura.
+ * Declarada na camada de aplicação (que a consome) e implementada por um adapter
+ * na infraestrutura — a dependência aponta de fora para dentro.
  */
 public interface ClientRepositoryPort {
 
@@ -20,6 +21,9 @@ public interface ClientRepositoryPort {
 
     /** Upsert: persiste/atualiza e devolve o domínio remapeado (id e timestamps populados). */
     Client save(Client client);
+
+    /** Total de registros, para o cabeçalho X-Total-Count da listagem. */
+    long countAll();
 
     void removeById(Long id);
 }

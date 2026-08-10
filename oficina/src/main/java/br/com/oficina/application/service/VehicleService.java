@@ -6,8 +6,8 @@ import br.com.oficina.application.dto.VehicleResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Vehicle;
-import br.com.oficina.domain.ports.out.ClientRepositoryPort;
-import br.com.oficina.domain.ports.out.VehicleRepositoryPort;
+import br.com.oficina.application.ports.out.ClientRepositoryPort;
+import br.com.oficina.application.ports.out.VehicleRepositoryPort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -28,6 +28,11 @@ public class VehicleService {
         return vehicleRepository.listAll(Pagination.page(page), Pagination.cap(size)).stream()
             .map(VehicleResponseDto::from)
             .toList();
+    }
+
+    /** Total de veículos, para o cabeçalho X-Total-Count. */
+    public long countAll() {
+        return vehicleRepository.countAll();
     }
 
     public VehicleResponseDto findById(Long id) {

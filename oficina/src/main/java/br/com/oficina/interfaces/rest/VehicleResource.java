@@ -30,10 +30,13 @@ public class VehicleResource {
     }
 
     @GET
-    @Operation(summary = "Listar veículos (paginado)")
-    public List<VehicleResponseDto> listAll(@QueryParam("page") @DefaultValue("0") int page,
-                                            @QueryParam("size") @DefaultValue("20") int size) {
-        return vehicleService.listAll(page, size);
+    @Operation(summary = "Listar veículos (paginado)",
+               description = "Total de registros, ignorando a paginação, no cabeçalho X-Total-Count.")
+    public Response listAll(@QueryParam("page") @DefaultValue("0") int page,
+                            @QueryParam("size") @DefaultValue("20") int size) {
+        return Response.ok(vehicleService.listAll(page, size))
+            .header(WorkOrderResource.TOTAL_COUNT_HEADER, vehicleService.countAll())
+            .build();
     }
 
     @GET

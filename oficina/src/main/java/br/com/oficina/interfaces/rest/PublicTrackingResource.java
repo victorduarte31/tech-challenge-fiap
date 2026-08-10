@@ -45,12 +45,14 @@ public class PublicTrackingResource {
     @Operation(
         summary = "Aprovar orçamento",
         description = "Cliente aprova o orçamento e autoriza execução (AWAITING_APPROVAL → IN_EXECUTION). " +
-                      "Exige CPF/CNPJ no corpo como prova de identidade — deve coincidir com o cliente da OS."
+                      "Exige, no corpo, o CPF/CNPJ do cliente da OS e o código de autorização de uso " +
+                      "único enviado por e-mail no momento do envio do orçamento. O código expira ao " +
+                      "ser usado; um reenvio do orçamento gera um novo e invalida o anterior."
     )
     public PublicWorkOrderDto approve(@PathParam("orderNumber") String orderNumber,
                                       @Valid @NotNull(message = "Corpo da requisição é obrigatório") PublicApprovalRequestDto request) {
         return PublicWorkOrderDto.from(
-            approveBudget.approveByOrderNumber(orderNumber, request.clientCpfCnpj())
+            approveBudget.approveByOrderNumber(orderNumber, request.clientCpfCnpj(), request.approvalToken())
         );
     }
 
@@ -60,12 +62,13 @@ public class PublicTrackingResource {
     @Operation(
         summary = "Rejeitar orçamento",
         description = "Cliente rejeita o orçamento (AWAITING_APPROVAL → CANCELLED). " +
-                      "Exige CPF/CNPJ no corpo como prova de identidade — deve coincidir com o cliente da OS."
+                      "Exige, no corpo, o CPF/CNPJ do cliente da OS e o código de autorização de uso " +
+                      "único enviado por e-mail no momento do envio do orçamento."
     )
     public PublicWorkOrderDto reject(@PathParam("orderNumber") String orderNumber,
                                      @Valid @NotNull(message = "Corpo da requisição é obrigatório") PublicApprovalRequestDto request) {
         return PublicWorkOrderDto.from(
-            approveBudget.rejectByOrderNumber(orderNumber, request.clientCpfCnpj())
+            approveBudget.rejectByOrderNumber(orderNumber, request.clientCpfCnpj(), request.approvalToken())
         );
     }
 }

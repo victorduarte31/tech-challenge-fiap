@@ -1,0 +1,73 @@
+name: Acesso ao cluster k3s via SSM
+description: >
+  Instala o plugin do Session Manager, recupera o kubeconfig do node k3s e abre um
+  túnel local para a porta 6443. Deixa KUBECONFIG e INSTANCE_ID no ambiente do job.
+  Existe para não duplicar ~40 linhas idênticas entre os jobs de deploy e de smoke
+  test — duplicação em que uma correção aplicada num lado e esquecida no outro passa
+  despercebida até o deploy quebrar.
+
+runs:
+  using: composite
+  steps:
+    - name: Instalar plugin de sessão do SSM
+      shell: bash
+      run: |
+        curl -s "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" \
+          -o /tmp/session-manager-plugin.deb
+        sudo dpkg -i /tmp/session-manager-plugin.deb
+
+    - name: Buscar kubeconfig via SSM Run Command
+      shell: bash
+      run: |
+        # Run Command em vez de SSH: dispensa distribuir a chave privada da EC2 como
+        # secret e não depende do IP de saída do runner, que é dinâmico.
+        INSTANCE_ID="$(aws ec2 describe-instances \
+          --filters "Name=tag:Project,Values=oficina" "Name=instance-state-name,Values=running" \
+          --query 'Reservations[0].Instances[0].InstanceId' --output text)"
+        if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+          echo "::error::Nenhuma EC2 em execução com tag Project=oficina. Rode o terraform-apply antes."
+          exit 1
+        fi
+        echo "INSTANCE_ID=$INSTANCE_ID" >> "$GITHUB_ENV"
+
+        CMD_ID="$(aws ssm send-command \
+          --instance-ids "$INSTANCE_ID" \
+          --document-name AWS-RunShellScript \
+          --parameters 'commands=["cat /home/ec2-user/.kube/config"]' \
+          --query 'Command.CommandId' --output text)"
+
+        for _ in $(seq 1 20); do
+          STATUS="$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query 'Status' --output text 2>/dev/null || echo Pending)"
+          [ "$STATUS" = "Success" ] && break
+          [ "$STATUS" = "Failed" ] && { echo "::error::Comando SSM falhou"; exit 1; }
+          sleep 3
+        done
+        [ "$STATUS" = "Success" ] || { echo "::error::Timeout aguardando o SSM"; exit 1; }
+
+        aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+          --query 'StandardOutputContent' --output text > /tmp/kubeconfig
+        chmod 600 /tmp/kubeconfig
+        sed -i 's#server: https://[^:]*:6443#server: https://127.0.0.1:6443#' /tmp/kubeconfig
+        echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
+
+    - name: Abrir túnel SSM para a API do k3s (porta 6443 nunca exposta no security group)
+      shell: bash
+      run: |
+        nohup aws ssm start-session --target "$INSTANCE_ID" \
+          --document-name AWS-StartPortForwardingSession \
+          --parameters '{"portNumber":["6443"],"localPortNumber":["6443"]}' \
+          > /tmp/ssm-tunnel.log 2>&1 &
+
+        # Espera ativa em vez de "sleep 8" fixo: o túnel às vezes sobe em 2s, às vezes
+        # em 15s, e um sleep fixo ou desperdiça tempo ou falha de forma intermitente.
+        for _ in $(seq 1 30); do
+          if kubectl version --request-timeout=3s >/dev/null 2>&1; then
+            echo "Túnel SSM pronto."
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "::error::Túnel SSM não respondeu em 60s"
+        cat /tmp/ssm-tunnel.log
+        exit 1

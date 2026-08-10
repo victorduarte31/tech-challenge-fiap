@@ -1,5 +1,6 @@
 terraform {
-  required_version = ">= 1.7"
+  # 1.10 é o piso por causa de "use_lockfile" no backend S3 (backend.tf).
+  required_version = ">= 1.10"
 
   required_providers {
     aws = {
@@ -14,5 +15,16 @@ terraform {
 }
 
 provider "aws" {
-  region = "us-east-1"
+  region = var.aws_region
+
+  # Toda a identificação de recursos em um lugar só: sem isto, as tags ficavam
+  # dependentes de cada resource lembrar de repeti-las, e os comandos de conferência
+  # de recursos órfãos do README (que filtram por tag:Project) perdiam recursos.
+  default_tags {
+    tags = {
+      Project     = var.project_name
+      ManagedBy   = "terraform"
+      Environment = "lab"
+    }
+  }
 }

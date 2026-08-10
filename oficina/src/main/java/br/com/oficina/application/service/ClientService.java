@@ -6,8 +6,8 @@ import br.com.oficina.application.dto.ClientResponseDto;
 import br.com.oficina.domain.exception.BusinessException;
 import br.com.oficina.domain.exception.ResourceNotFoundException;
 import br.com.oficina.domain.model.Client;
-import br.com.oficina.domain.ports.out.ClientRepositoryPort;
-import br.com.oficina.infrastructure.validation.CpfCnpjUtils;
+import br.com.oficina.application.ports.out.ClientRepositoryPort;
+import br.com.oficina.domain.valueobject.CpfCnpj;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 import java.util.List;
@@ -28,6 +28,11 @@ public class ClientService {
             .toList();
     }
 
+    /** Total de clientes, para o cabeçalho X-Total-Count. */
+    public long countAll() {
+        return clientRepository.countAll();
+    }
+
     public ClientResponseDto findById(Long id) {
         Client client = clientRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(CLIENTE, id));
@@ -35,7 +40,7 @@ public class ClientService {
     }
 
     public ClientResponseDto findByCpfCnpj(String cpfCnpj) {
-        String normalized = CpfCnpjUtils.normalize(cpfCnpj);
+        String normalized = CpfCnpj.normalize(cpfCnpj);
         Client client = clientRepository.findByCpfCnpj(normalized)
             .orElseThrow(() -> new ResourceNotFoundException("Cliente não encontrado com CPF/CNPJ: " + cpfCnpj));
         return ClientResponseDto.from(client);
@@ -43,7 +48,7 @@ public class ClientService {
 
     @Transactional
     public ClientResponseDto create(ClientRequestDto dto) {
-        String normalized = CpfCnpjUtils.normalize(dto.cpfCnpj());
+        String normalized = CpfCnpj.normalize(dto.cpfCnpj());
         if (clientRepository.existsByCpfCnpj(normalized)) {
             throw new BusinessException("CPF/CNPJ já cadastrado: " + dto.cpfCnpj());
         }
@@ -56,7 +61,7 @@ public class ClientService {
         Client client = clientRepository.fetchById(id)
             .orElseThrow(() -> new ResourceNotFoundException(CLIENTE, id));
 
-        String normalized = CpfCnpjUtils.normalize(dto.cpfCnpj());
+        String normalized = CpfCnpj.normalize(dto.cpfCnpj());
         if (!client.getCpfCnpj().equals(normalized) && clientRepository.existsByCpfCnpj(normalized)) {
             throw new BusinessException("CPF/CNPJ já cadastrado: " + dto.cpfCnpj());
         }

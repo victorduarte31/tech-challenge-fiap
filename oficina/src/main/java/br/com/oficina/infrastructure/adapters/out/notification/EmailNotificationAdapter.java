@@ -1,7 +1,7 @@
 package br.com.oficina.infrastructure.adapters.out.notification;
 
 import br.com.oficina.domain.event.WorkOrderStatusChangedEvent;
-import br.com.oficina.domain.ports.out.NotificationGatewayPort;
+import br.com.oficina.application.ports.out.NotificationGatewayPort;
 import io.quarkus.mailer.Mail;
 import io.quarkus.mailer.Mailer;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -69,12 +69,18 @@ public class EmailNotificationAdapter implements NotificationGatewayPort {
             Ordem de Serviço: %s
             Valor total do orçamento: R$ %s
 
-            Para aprovar ou recusar o orçamento, acesse o acompanhamento da sua OS
-            informando o número acima e o seu CPF/CNPJ.
+            Para aprovar ou recusar o orçamento, informe o número da OS acima, o seu
+            CPF/CNPJ e o código de autorização abaixo:
+
+            Código de autorização: %s
+
+            Este código é pessoal, vale para uma única decisão e perde a validade
+            assim que você aprovar ou recusar o orçamento.
 
             Atenciosamente,
             Oficina Mecânica
-            """.formatted(e.customerName(), e.vehicleDescription(), e.orderNumber(), e.totalCost());
+            """.formatted(e.customerName(), e.vehicleDescription(), e.orderNumber(),
+                          e.totalCost(), e.approvalToken());
     }
 
     private String finishedBody(WorkOrderStatusChangedEvent e) {

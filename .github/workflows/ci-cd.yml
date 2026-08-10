@@ -3,9 +3,25 @@ name: CI/CD
 on:
   push:
     branches: [master]
+    # Entrega automática por tag: um `git tag v1.2.0 && git push --tags` executa o
+    # pipeline inteiro (imagem -> infraestrutura -> deploy -> smoke test). Push comum
+    # continua rodando só build+testes, para não disparar `apply` contra a conta AWS
+    # Academy a cada commit. É o meio-termo entre "CD automatizado" e controle de custo.
+    tags: ["v*"]
   pull_request:
     branches: [master]
   workflow_dispatch: {}
+
+# Menor privilégio: o GITHUB_TOKEN default vem com escrita em vários escopos. Este
+# pipeline só precisa ler o repositório.
+permissions:
+  contents: read
+
+# Dois deploys simultâneos disputariam o lock do state do Terraform e poderiam
+# aplicar manifestos fora de ordem. Um por vez; o mais recente vence a fila.
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
@@ -13,6 +29,7 @@ env:
 
 jobs:
   build-test:
+    name: Build e testes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,11 +40,50 @@ jobs:
           cache: maven
       - name: mvn verify
         working-directory: oficina
-        run: mvn verify
+        run: mvn -B --no-transfer-progress verify
+      - name: Publicar relatório de testes
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: oficina/target/surefire-reports/
+          retention-days: 7
+      - name: Publicar relatório de cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: oficina/target/site/jacoco/
+          retention-days: 7
 
+  # Validação estática da infraestrutura: roda em todo push/PR, sem credencial e sem
+  # tocar na AWS. Pega erro de sintaxe, formatação e restrição de provider (como
+  # descrição de security group com acento) antes de chegar ao apply.
+  terraform-check:
+    name: Terraform fmt e validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+      - name: terraform fmt
+        working-directory: oficina/infra
+        run: terraform fmt -check -recursive -diff
+      - name: terraform validate
+        working-directory: oficina/infra
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+  # ---------------------------------------------------------------------------
+  # A partir daqui o pipeline toca a AWS de verdade (custo). Gate: disparo manual
+  # ou push de tag "v*" — nunca um push comum na master.
+  # ---------------------------------------------------------------------------
   docker-build-push:
-    needs: build-test
-    if: github.event_name == 'workflow_dispatch'
+    name: Imagem Docker
+    needs: [build-test, terraform-check]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,23 +97,49 @@ jobs:
       - name: ECR login
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
-      - name: Build and push image
-        working-directory: oficina
+      - uses: docker/setup-buildx-action@v3
+      - name: Build da imagem
+        uses: docker/build-push-action@v6
+        with:
+          context: oficina
+          # Carrega no daemon local para o scan rodar ANTES do push: uma imagem
+          # vulnerável não deve nem chegar ao registro.
+          load: true
+          tags: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Scan da imagem (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          # Só CRITICAL e só com correção disponível: um gate que falha por
+          # vulnerabilidade sem patch vira ruído e acaba sendo ignorado ou desligado.
+          severity: CRITICAL
+          ignore-unfixed: true
+      - name: Push para o ECR
         env:
           ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
         run: |
-          docker build -t $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }} .
-          docker tag $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }} $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-          docker push $ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest
+          docker tag "$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" \
+                     "$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest"
+          docker push "$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          docker push "$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}:latest"
 
-  # ATENÇÃO CUSTO: roda `apply -auto-approve` contra AWS real. Restrito a disparo manual
-  # (workflow_dispatch) de propósito — o gate de aprovação de custo do SESSION-GUIDE.md é a
-  # decisão consciente de disparar este workflow, nunca um push automático.
   terraform-apply:
-    needs: build-test
-    if: github.event_name == 'workflow_dispatch'
+    name: Provisionar infraestrutura
+    needs: [build-test, terraform-check]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # Os endereços saem do próprio apply e alimentam o job de deploy. Antes eram
+    # secrets atualizados à mão a cada sessão (DB_HOST, ECR_REPOSITORY_URL) — a
+    # fonte mais comum de deploy quebrado, porque a infraestrutura é recriada do
+    # zero e os endereços mudam.
+    outputs:
+      rds_endpoint: ${{ steps.tf.outputs.rds_endpoint }}
+      ecr_repository_url: ${{ steps.tf.outputs.ecr_repository_url }}
+      application_url: ${{ steps.tf.outputs.application_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials (temporárias da sessão AWS Academy — colar antes de disparar)
@@ -68,23 +150,33 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
       - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+          terraform_wrapper: false
       - name: terraform init/plan/apply
+        id: tf
         working-directory: oficina/infra
         env:
           TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
           TF_VAR_allowed_cidr: ${{ secrets.ALLOWED_CIDR }}
         run: |
-          terraform init
-          terraform plan -out=tfplan
-          terraform apply -auto-approve tfplan
+          terraform init -input=false
+          terraform plan -input=false -out=tfplan
+          terraform apply -auto-approve -input=false tfplan
+          {
+            echo "rds_endpoint=$(terraform output -raw rds_endpoint)"
+            echo "ecr_repository_url=$(terraform output -raw ecr_repository_url)"
+            echo "application_url=$(terraform output -raw application_url)"
+          } >> "$GITHUB_OUTPUT"
 
-  # Gating explícito: só faz sentido após build+push da imagem e provisionamento — ambos
-  # workflow_dispatch-only. Sem este `if`, o job dependeria de jobs "skipped" em push/PR e só
-  # não rodava por acidente do encadeamento de needs.
   deploy-k8s:
+    name: Deploy no cluster
     needs: [docker-build-push, terraform-apply]
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    env:
+      ECR_REPOSITORY_URL: ${{ needs.terraform-apply.outputs.ecr_repository_url }}
+      DB_HOST: ${{ needs.terraform-apply.outputs.rds_endpoint }}
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials (temporárias da sessão AWS Academy — colar antes de disparar)
@@ -94,54 +186,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Instalar plugin de sessão do SSM
-        run: |
-          curl -s "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o /tmp/session-manager-plugin.deb
-          sudo dpkg -i /tmp/session-manager-plugin.deb
-      - name: Buscar kubeconfig via SSM Run Command (evita depender do IP de saída instável do runner)
-        run: |
-          INSTANCE_ID="$(aws ec2 describe-instances \
-            --filters "Name=tag:Project,Values=oficina" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].InstanceId' --output text)"
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
-          CMD_ID="$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name AWS-RunShellScript \
-            --parameters 'commands=["cat /home/ec2-user/.kube/config"]' \
-            --query 'Command.CommandId' --output text)"
-          for i in $(seq 1 20); do
-            STATUS="$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query 'Status' --output text 2>/dev/null || echo Pending)"
-            [ "$STATUS" = "Success" ] && break
-            [ "$STATUS" = "Failed" ] && { echo "Comando SSM falhou"; exit 1; }
-            sleep 3
-          done
-          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query 'StandardOutputContent' --output text > /tmp/kubeconfig
-          sed -i 's#server: https://[^:]*:6443#server: https://127.0.0.1:6443#' /tmp/kubeconfig
-          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
-      - name: Abrir túnel SSM para a API do k3s (porta 6443 nunca exposta no security group)
-        run: |
-          nohup aws ssm start-session --target "$INSTANCE_ID" \
-            --document-name AWS-StartPortForwardingSession \
-            --parameters '{"portNumber":["6443"],"localPortNumber":["6443"]}' \
-            > /tmp/ssm-tunnel.log 2>&1 &
-          sleep 8
-      - name: Apply base manifests
+      - uses: ./.github/actions/k3s-kubeconfig
+
+      - name: Aplicar base (namespace + configmap)
         run: kubectl apply -f oficina/k8s/namespace.yaml -f oficina/k8s/configmap.yaml
-      - name: Gerar e aplicar secret do ECR (token de 12h — spec-kubernetes.md)
+
+      - name: Secret do ECR (token de 12h — spec-kubernetes.md)
         run: |
           kubectl create secret docker-registry ecr-registry-secret \
             --namespace oficina \
-            --docker-server="${{ secrets.ECR_REPOSITORY_URL }}" \
+            --docker-server="$ECR_REPOSITORY_URL" \
             --docker-username=AWS \
             --docker-password="$(aws ecr get-login-password --region ${{ env.AWS_REGION }})" \
             --dry-run=client -o yaml | kubectl apply -f -
-      - name: Generate and apply secret (nunca commitado com valor real)
+
+      - name: Secret da aplicação (nunca commitado com valor real)
         run: |
           kubectl create secret generic oficina-secrets \
             --namespace oficina \
-            --from-literal=DB_HOST="${{ secrets.DB_HOST }}" \
+            --from-literal=DB_HOST="$DB_HOST" \
             --from-literal=DB_USERNAME="${{ secrets.DB_USERNAME }}" \
             --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
             --from-literal=MAILER_HOST="${{ secrets.MAILER_HOST }}" \
@@ -150,28 +213,52 @@ jobs:
             --from-literal=APP_SEED_ADMIN_PASSWORD="${{ secrets.APP_SEED_ADMIN_PASSWORD }}" \
             --from-literal=APP_SEED_MECHANIC_PASSWORD="${{ secrets.APP_SEED_MECHANIC_PASSWORD }}" \
             --dry-run=client -o yaml | kubectl apply -f -
-      - name: Gerar e aplicar secret das chaves JWT (compartilhado entre réplicas)
+
+      - name: Secret das chaves JWT (o mesmo par para todas as réplicas)
         env:
           JWT_PRIVATE_KEY: ${{ secrets.JWT_PRIVATE_KEY_PEM }}
           JWT_PUBLIC_KEY: ${{ secrets.JWT_PUBLIC_KEY_PEM }}
         run: |
-          echo "$JWT_PRIVATE_KEY" > /tmp/privateKey.pem
-          echo "$JWT_PUBLIC_KEY" > /tmp/publicKey.pem
+          umask 077
+          printf '%s' "$JWT_PRIVATE_KEY" > /tmp/privateKey.pem
+          printf '%s' "$JWT_PUBLIC_KEY" > /tmp/publicKey.pem
           kubectl create secret generic oficina-jwt-keys \
             --namespace oficina \
             --from-file=privateKey.pem=/tmp/privateKey.pem \
             --from-file=publicKey.pem=/tmp/publicKey.pem \
             --dry-run=client -o yaml | kubectl apply -f -
-      - name: Apply deployment/service/hpa
+          rm -f /tmp/privateKey.pem /tmp/publicKey.pem
+
+      - name: Aplicar deployment, service, ingress, HPA e NetworkPolicy
         run: |
-          sed "s#CHANGE_ME_ECR_REPOSITORY_URL#${{ secrets.ECR_REPOSITORY_URL }}#" oficina/k8s/deployment.yaml \
-            | sed "s#:latest#:${{ github.sha }}#" \
+          # A imagem é injetada com "kubectl set image" logo abaixo, e não por um
+          # sed no YAML: o sed antigo trocava QUALQUER ":latest" do manifesto e
+          # dependia da ordem exata dos campos.
+          sed "s#CHANGE_ME_ECR_REPOSITORY_URL#$ECR_REPOSITORY_URL#" oficina/k8s/deployment.yaml \
             | kubectl apply -f -
-          kubectl apply -f oficina/k8s/service.yaml -f oficina/k8s/hpa.yaml
+          kubectl apply -f oficina/k8s/service.yaml \
+                        -f oficina/k8s/ingress.yaml \
+                        -f oficina/k8s/hpa.yaml \
+                        -f oficina/k8s/networkpolicy.yaml
+          kubectl -n oficina set image deployment/oficina-app \
+            oficina-app="$ECR_REPOSITORY_URL:${{ github.sha }}"
+
+      - name: Aguardar rollout
+        run: kubectl -n oficina rollout status deployment/oficina-app --timeout=300s
+
+      - name: Rollback automático se o rollout falhar
+        if: failure()
+        run: |
+          echo "::warning::Rollout falhou — revertendo para a revisão anterior."
+          kubectl -n oficina rollout undo deployment/oficina-app || true
+          kubectl -n oficina get pods -o wide
+          kubectl -n oficina describe deployment/oficina-app
+          kubectl -n oficina logs -l app=oficina-app --tail=100 --all-containers || true
 
   smoke-test:
-    needs: deploy-k8s
-    if: github.event_name == 'workflow_dispatch'
+    name: Smoke test
+    needs: [deploy-k8s, terraform-apply]
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -182,42 +269,58 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Instalar plugin de sessão do SSM
-        run: |
-          curl -s "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o /tmp/session-manager-plugin.deb
-          sudo dpkg -i /tmp/session-manager-plugin.deb
-      - name: Buscar kubeconfig via SSM Run Command
-        run: |
-          INSTANCE_ID="$(aws ec2 describe-instances \
-            --filters "Name=tag:Project,Values=oficina" "Name=instance-state-name,Values=running" \
-            --query 'Reservations[0].Instances[0].InstanceId' --output text)"
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
-          CMD_ID="$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name AWS-RunShellScript \
-            --parameters 'commands=["cat /home/ec2-user/.kube/config"]' \
-            --query 'Command.CommandId' --output text)"
-          for i in $(seq 1 20); do
-            STATUS="$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query 'Status' --output text 2>/dev/null || echo Pending)"
-            [ "$STATUS" = "Success" ] && break
-            [ "$STATUS" = "Failed" ] && { echo "Comando SSM falhou"; exit 1; }
-            sleep 3
-          done
-          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query 'StandardOutputContent' --output text > /tmp/kubeconfig
-          sed -i 's#server: https://[^:]*:6443#server: https://127.0.0.1:6443#' /tmp/kubeconfig
-          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
-      - name: Abrir túnel SSM para a API do k3s (porta 6443 nunca exposta no security group)
-        run: |
-          nohup aws ssm start-session --target "$INSTANCE_ID" \
-            --document-name AWS-StartPortForwardingSession \
-            --parameters '{"portNumber":["6443"],"localPortNumber":["6443"]}' \
-            > /tmp/ssm-tunnel.log 2>&1 &
-          sleep 8
-      - name: Port-forward and check health endpoint
+      - uses: ./.github/actions/k3s-kubeconfig
+
+      - name: Health check pelo Service (dentro do cluster)
         run: |
           kubectl -n oficina rollout status deployment/oficina-app --timeout=180s
           kubectl -n oficina port-forward svc/oficina-service 8080:80 &
-          sleep 5
+          for _ in $(seq 1 15); do
+            curl -sf http://localhost:8080/q/health/live >/dev/null && break
+            sleep 2
+          done
           curl -sf http://localhost:8080/q/health/live
+          curl -sf http://localhost:8080/q/health/ready
+
+      # Valida a cadeia Traefik -> Service -> pod, que o port-forward acima não
+      # exercita. O curl roda DENTRO da EC2, via SSM: a porta 80 do security group é
+      # restrita ao IP do aluno e o runner do GitHub tem IP dinâmico — abrir o
+      # security group para o runner significaria abrir para a internet inteira.
+      # O último salto (internet -> security group) o aluno confere do próprio
+      # navegador, com a URL impressa no resumo abaixo.
+      - name: Health check pelo Ingress (de dentro do node)
+        run: |
+          CMD_ID="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters 'commands=["for i in $(seq 1 20); do curl -sf http://localhost/q/health/live && exit 0; sleep 5; done; exit 1"]' \
+            --query 'Command.CommandId' --output text)"
+          for _ in $(seq 1 30); do
+            STATUS="$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query 'Status' --output text 2>/dev/null || echo Pending)"
+            case "$STATUS" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut) echo "::error::Ingress não respondeu no node"; exit 1 ;;
+            esac
+            sleep 5
+          done
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query 'StandardOutputContent' --output text
+
+      - name: Resumo do ambiente publicado
+        run: |
+          {
+            echo "### Ambiente publicado"
+            echo ""
+            echo "- API: ${{ needs.terraform-apply.outputs.application_url }}"
+            echo "- Imagem: \`${{ github.sha }}\`"
+            echo ""
+            echo "O acesso pela URL acima é liberado apenas para o CIDR em \`ALLOWED_CIDR\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rollback automático se o smoke test falhar
+        if: failure()
+        run: |
+          echo "::warning::Smoke test falhou — revertendo o deploy."
+          kubectl -n oficina rollout undo deployment/oficina-app || true
+          kubectl -n oficina rollout status deployment/oficina-app --timeout=180s || true

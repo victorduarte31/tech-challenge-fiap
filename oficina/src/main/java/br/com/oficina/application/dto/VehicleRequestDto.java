@@ -1,6 +1,6 @@
 package br.com.oficina.application.dto;
 
-import br.com.oficina.infrastructure.validation.ValidLicensePlate;
+import br.com.oficina.application.validation.ValidLicensePlate;
 import jakarta.validation.constraints.*;
 
 public record VehicleRequestDto(

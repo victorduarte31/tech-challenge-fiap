@@ -1,0 +1,42 @@
+# Segmentação de rede do namespace: nega tudo por padrão e libera só o necessário.
+#
+# Sem NetworkPolicy, qualquer pod do cluster alcança os pods da aplicação e o RDS
+# usando a identidade de rede do node. Aqui o tráfego de entrada fica restrito ao
+# ingress controller, e a saída ao DNS, ao PostgreSQL e ao SMTP.
+#
+# Requer um CNI que implemente NetworkPolicy. O flannel padrão do k3s NÃO
+# implementa — para valer, subir o k3s com `--flannel-backend=none` + Calico, ou
+# usar um cluster gerenciado (EKS com Calico/Cilium). Fica versionado porque é o
+# estado desejado e portável; num k3s padrão é inerte, não quebra nada.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: oficina-app
+  namespace: oficina
+spec:
+  podSelector:
+    matchLabels:
+      app: oficina-app
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - ports:
+        # PostgreSQL (RDS) e SMTP com STARTTLS
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 587

@@ -13,7 +13,6 @@ import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import java.net.URI;
-import java.util.List;
 
 @Path("/admin/clients")
 @Produces(MediaType.APPLICATION_JSON)
@@ -30,10 +29,13 @@ public class ClientResource {
     }
 
     @GET
-    @Operation(summary = "Listar clientes (paginado)")
-    public List<ClientResponseDto> listAll(@QueryParam("page") @DefaultValue("0") int page,
-                                           @QueryParam("size") @DefaultValue("20") int size) {
-        return clientService.listAll(page, size);
+    @Operation(summary = "Listar clientes (paginado)",
+               description = "Total de registros, ignorando a paginação, no cabeçalho X-Total-Count.")
+    public Response listAll(@QueryParam("page") @DefaultValue("0") int page,
+                            @QueryParam("size") @DefaultValue("20") int size) {
+        return Response.ok(clientService.listAll(page, size))
+            .header(WorkOrderResource.TOTAL_COUNT_HEADER, clientService.countAll())
+            .build();
     }
 
     @GET
