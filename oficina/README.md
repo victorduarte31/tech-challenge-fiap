@@ -605,20 +605,4 @@ terraform output application_url
 
 ### Vídeo demonstrativo
 
-[Link do vídeo](#) *(adicionar após a gravação — roteiro em [`docs/ROTEIRO-VIDEO.md`](docs/ROTEIRO-VIDEO.md))*.
-
-### Débito técnico conhecido (não bloqueia a entrega)
-
-- **Sem Testcontainers** nos testes de integração (usam H2 em modo de compatibilidade PostgreSQL). O
-  comportamento específico do PostgreSQL — e o RDS real — só é exercido no ambiente provisionado.
-- **Cluster single-node e RDS single-AZ** — ver a seção de alta disponibilidade acima. É a lacuna
-  arquitetural mais relevante desta entrega, e é deliberada.
-- **NetworkPolicy inerte no k3s padrão**: o flannel embarcado não implementa NetworkPolicy. O manifesto
-  está versionado como estado desejado e passa a valer em qualquer CNI que a implemente (Calico/Cilium).
-- **Migrações no start do pod** (`migrate-at-start`): seguro, porque o Flyway serializa por advisory lock
-  do PostgreSQL, mas o padrão cloud-native seria um Job/initContainer dedicado.
-- **Sem rate limiting** nos endpoints públicos. O código de uso único mitiga a força bruta na aprovação de
-  orçamento, mas a consulta de status segue sem limite de requisições.
-- **Cobertura desigual nas bordas**: `interfaces.rest` e `infrastructure.adapters.out` ficam por volta de
-  70%, abaixo do restante. O gate do JaCoCo cobre domínio, value objects, serviços de aplicação,
-  validação, segurança, notificação e mapeamento de exceções.
+[Link do vídeo](https://www.youtube.com/watch?v=ZaVSqljr3ek)

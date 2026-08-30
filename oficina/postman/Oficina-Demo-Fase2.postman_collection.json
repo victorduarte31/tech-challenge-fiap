@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8f3c1d20-5a7e-4c11-9b64-0d2f7a6e4c31",
     "name": "Oficina Mecânica — Demo Fase 2 (vídeo)",
-    "description": "Collection de demonstração da Fase 2, na ordem exata do roteiro de vídeo.\n\nCada pasta cobre um requisito do enunciado e os testes verificam o comportamento esperado — rode com o **Collection Runner** para ver tudo verde de uma vez, ou requisição a requisição para narrar.\n\n**Pré-requisito:** `docker-compose up -d` na pasta `oficina/`, com a stack em estado limpo (`docker-compose down -v` antes, para a numeração começar em OS-000001).\n\nVariáveis `baseUrl` (http://localhost:8080) e `mailpitUrl` (http://localhost:8025). Para apontar ao ambiente cloud, troque só `baseUrl` — mas lá o canal público de aprovação depende de SMTP real; use o canal administrativo.",
+    "description": "Collection de demonstração da Fase 2, na ordem exata do roteiro de vídeo.\n\n**Pode ser executada quantas vezes quiser, sem limpar o banco.** O CPF do cliente e a placa do veículo são gerados aleatoriamente a cada execução (com dígitos verificadores válidos), e as verificações de métricas usam a variação em relação ao estado inicial, não valores absolutos.\n\n**Não precisa de arquivo de environment** — as variáveis estão embutidas na collection. Para apontar a outro ambiente, edite `baseUrl` em Variables.\n\nPré-requisito: `docker-compose up -d` na pasta `oficina/`, com os três containers saudáveis.\n\nRode com o **Collection Runner** para ver tudo verde de uma vez, ou requisição a requisição para narrar.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -12,14 +12,16 @@
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
     { "key": "mailpitUrl", "value": "http://localhost:8025" },
-    { "key": "clientCpf", "value": "529.982.247-25" },
-    { "key": "outroCpf", "value": "111.444.777-35" },
     { "key": "adminUser", "value": "admin" },
     { "key": "adminPass", "value": "admin123" },
     { "key": "mecanicoUser", "value": "mecanico" },
     { "key": "mecanicoPass", "value": "mecanico123" },
     { "key": "token", "value": "" },
     { "key": "tokenMecanico", "value": "" },
+    { "key": "clientCpf", "value": "" },
+    { "key": "clientCpfDigits", "value": "" },
+    { "key": "outroCpf", "value": "" },
+    { "key": "plate", "value": "" },
     { "key": "clientId", "value": "" },
     { "key": "vehicleId", "value": "" },
     { "key": "serviceId", "value": "" },
@@ -33,7 +35,10 @@
     { "key": "orderNumber4", "value": "" },
     { "key": "messageId", "value": "" },
     { "key": "approvalToken", "value": "" },
-    { "key": "ativasAntes", "value": "" }
+    { "key": "ativasAntes", "value": "" },
+    { "key": "baseTotalOs", "value": "" },
+    { "key": "baseFinished", "value": "" },
+    { "key": "baseRevenue", "value": "" }
   ],
   "item": [
     {
@@ -64,11 +69,9 @@
             "pm.test('200 OK', () => pm.response.to.have.status(200));",
             "const j = pm.response.json();",
             "pm.test('status UP', () => pm.expect(j.status).to.eql('UP'));",
-            "pm.test('conexao com o banco checada', () => {",
-            "  const nomes = j.checks.map(c => c.name).join(' | ');",
-            "  console.log('Checks:', nomes);",
-            "  pm.expect(nomes.toLowerCase()).to.include('database');",
-            "});"
+            "const nomes = j.checks.map(c => c.name).join(' | ');",
+            "console.log('Checks:', nomes);",
+            "pm.test('conexao com o banco checada', () => pm.expect(nomes.toLowerCase()).to.include('database'));"
           ] } }]
         }
       ]
@@ -116,34 +119,98 @@
       "name": "2 — Cadastros base",
       "item": [
         {
-          "name": "Criar cliente (PF) → clientId",
+          "name": "Baseline de métricas (para os deltas do final)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/metrics", "host": ["{{baseUrl}}"], "path": ["admin", "metrics"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('baseTotalOs', j.totalWorkOrders);",
+            "pm.collectionVariables.set('baseFinished', j.finishedWorkOrders);",
+            "pm.collectionVariables.set('baseRevenue', j.totalRevenue);",
+            "console.log('Estado inicial -> OS:', j.totalWorkOrders, '| entregues:', j.finishedWorkOrders, '| receita:', j.totalRevenue);",
+            "pm.test('baseline capturado', () => pm.expect(j.totalWorkOrders).to.be.a('number'));"
+          ] } }]
+        },
+        {
+          "name": "Criar cliente (PF, CPF aleatório válido) → clientId",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": { "mode": "raw", "raw": "{\n  \"name\": \"Victor Duarte\",\n  \"cpfCnpj\": \"{{clientCpf}}\",\n  \"clientType\": \"PF\",\n  \"email\": \"cliente@oficina.local\",\n  \"phone\": \"11999998888\"\n}", "options": { "raw": { "language": "json" } } },
             "url": { "raw": "{{baseUrl}}/admin/clients", "host": ["{{baseUrl}}"], "path": ["admin", "clients"] }
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('201 Created', () => pm.response.to.have.status(201));",
-            "const j = pm.response.json();",
-            "pm.collectionVariables.set('clientId', j.id);",
-            "pm.test('CPF normalizado para so digitos (Value Object)', () => pm.expect(j.cpfCnpj).to.eql('52998224725'));"
-          ] } }]
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "// Gera CPFs validos (com digitos verificadores corretos) a cada execucao.",
+              "// E o que torna a collection re-executavel sem limpar o banco: o CPF e",
+              "// UNIQUE na tabela de clientes, entao um valor fixo daria 422 na segunda vez.",
+              "function gerarCpf() {",
+              "  const d = [];",
+              "  for (let i = 0; i < 9; i++) d.push(Math.floor(Math.random() * 10));",
+              "  if (d.every(x => x === d[0])) d[0] = (d[0] + 1) % 10;",
+              "  const dv = (arr, sw) => {",
+              "    let s = 0;",
+              "    for (let i = 0; i < arr.length; i++) s += arr[i] * (sw - i);",
+              "    const r = 11 - (s % 11);",
+              "    return r >= 10 ? 0 : r;",
+              "  };",
+              "  d.push(dv(d, 10));",
+              "  d.push(dv(d, 11));",
+              "  return d.join('');",
+              "}",
+              "const cpf = gerarCpf();",
+              "let outro = gerarCpf();",
+              "while (outro === cpf) outro = gerarCpf();",
+              "const mascarar = c => c.substring(0,3) + '.' + c.substring(3,6) + '.' + c.substring(6,9) + '-' + c.substring(9);",
+              "pm.collectionVariables.set('clientCpfDigits', cpf);",
+              "pm.collectionVariables.set('clientCpf', mascarar(cpf));",
+              "pm.collectionVariables.set('outroCpf', mascarar(outro));",
+              "console.log('CPF gerado para esta execucao:', mascarar(cpf));"
+            ] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('clientId', j.id);",
+              "pm.test('CPF normalizado para so digitos (Value Object)', () => {",
+              "  pm.expect(j.cpfCnpj).to.eql(pm.collectionVariables.get('clientCpfDigits'));",
+              "});"
+            ] } }
+          ]
         },
         {
-          "name": "Criar veículo (placa Mercosul) → vehicleId",
+          "name": "Criar veículo (placa Mercosul aleatória) → vehicleId",
           "request": {
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"licensePlate\": \"ABC1D23\",\n  \"brand\": \"Volkswagen\",\n  \"model\": \"Golf GTI\",\n  \"productionYear\": 2021,\n  \"clientId\": {{clientId}}\n}", "options": { "raw": { "language": "json" } } },
+            "body": { "mode": "raw", "raw": "{\n  \"licensePlate\": \"{{plate}}\",\n  \"brand\": \"Volkswagen\",\n  \"model\": \"Golf GTI\",\n  \"productionYear\": 2021,\n  \"clientId\": {{clientId}}\n}", "options": { "raw": { "language": "json" } } },
             "url": { "raw": "{{baseUrl}}/admin/vehicles", "host": ["{{baseUrl}}"], "path": ["admin", "vehicles"] }
           },
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
-            "pm.test('201 Created', () => pm.response.to.have.status(201));",
-            "const j = pm.response.json();",
-            "pm.collectionVariables.set('vehicleId', j.id);",
-            "pm.test('vinculado ao cliente criado', () => pm.expect(j.clientId).to.eql(pm.collectionVariables.get('clientId')));"
-          ] } }]
+          "event": [
+            { "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+              "// Placa no padrao Mercosul: LLLNLNN. Tambem e UNIQUE na tabela.",
+              "const L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';",
+              "const rl = () => L[Math.floor(Math.random() * 26)];",
+              "const rd = () => Math.floor(Math.random() * 10);",
+              "const placa = `${rl()}${rl()}${rl()}${rd()}${rl()}${rd()}${rd()}`;",
+              "pm.collectionVariables.set('plate', placa);",
+              "console.log('Placa gerada para esta execucao:', placa);"
+            ] } },
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "const j = pm.response.json();",
+              "pm.collectionVariables.set('vehicleId', j.id);",
+              "pm.test('placa aceita no formato Mercosul', () => {",
+              "  pm.expect(j.licensePlate).to.eql(pm.collectionVariables.get('plate'));",
+              "});",
+              "pm.test('vinculado ao cliente criado', () => {",
+              "  pm.expect(j.clientId).to.eql(pm.collectionVariables.get('clientId'));",
+              "});"
+            ] } }
+          ]
         },
         {
           "name": "Criar serviço no catálogo → serviceId",
@@ -198,9 +265,9 @@
             "pm.test('identificacao unica no formato OS-NNNNNN', () => pm.expect(j.orderNumber).to.match(/^OS-\\d{6}$/));",
             "pm.test('status inicial RECEIVED', () => pm.expect(j.status).to.eql('RECEIVED'));",
             "pm.test('orcamento somado pelo dominio: 180,00 + 45,90 = 225,90', () => pm.expect(Number(j.totalCost)).to.eql(225.90));",
-            "pm.test('dados do cliente e do veiculo no snapshot', () => {",
+            "pm.test('snapshot do cliente e do veiculo na OS', () => {",
             "  pm.expect(j.clientName).to.eql('Victor Duarte');",
-            "  pm.expect(j.vehicleLicensePlate).to.eql('ABC1D23');",
+            "  pm.expect(j.vehicleLicensePlate).to.eql(pm.collectionVariables.get('plate'));",
             "});"
           ] } }]
         }
@@ -443,11 +510,15 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+            "url": { "raw": "{{baseUrl}}/admin/work-orders?size=100", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"], "query": [{ "key": "size", "value": "100" }] }
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('200 OK', () => pm.response.to.have.status(200));",
             "const lista = pm.response.json();",
+            "const meus = [",
+            "  pm.collectionVariables.get('orderNumber'),",
+            "  pm.collectionVariables.get('orderNumber4')",
+            "];",
             "console.log('--- FILA DE TRABALHO ---');",
             "lista.forEach((o, i) => console.log((i + 1) + '. ' + o.orderNumber + '  ' + o.status));",
             "",
@@ -470,6 +541,10 @@
             "pm.test('nenhuma OS terminal aparece na fila ativa', () => {",
             "  const status = lista.map(o => o.status);",
             "  ['FINISHED', 'DELIVERED', 'CANCELLED'].forEach(s => pm.expect(status).to.not.include(s));",
+            "});",
+            "",
+            "pm.test('a OS desta execucao esta na fila', () => {",
+            "  pm.expect(lista.map(o => o.orderNumber)).to.include(meus[0]);",
             "});",
             "",
             "const total = pm.response.headers.get('X-Total-Count');",
@@ -512,7 +587,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+            "url": { "raw": "{{baseUrl}}/admin/work-orders?size=100", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"], "query": [{ "key": "size", "value": "100" }] }
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('200 OK', () => pm.response.to.have.status(200));",
@@ -532,7 +607,7 @@
           "request": {
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{baseUrl}}/admin/work-orders?status=DELIVERED", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"], "query": [{ "key": "status", "value": "DELIVERED" }] }
+            "url": { "raw": "{{baseUrl}}/admin/work-orders?status=DELIVERED&size=100", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"], "query": [{ "key": "status", "value": "DELIVERED" }, { "key": "size", "value": "100" }] }
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('200 OK', () => pm.response.to.have.status(200));",
@@ -663,24 +738,39 @@
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('200 OK', () => pm.response.to.have.status(200));",
             "const j = pm.response.json();",
-            "console.log('Metricas de negocio:', JSON.stringify(j));",
-            "pm.test('5 OS criadas no total', () => pm.expect(j.totalWorkOrders).to.eql(5));",
-            "pm.test('1 OS concluida/entregue', () => pm.expect(j.finishedWorkOrders).to.eql(1));",
-            "pm.test('receita reconhecida so na entrega: R$ 225,90', () => pm.expect(Number(j.totalRevenue)).to.eql(225.90));"
+            "const baseOs   = Number(pm.collectionVariables.get('baseTotalOs'));",
+            "const baseFin  = Number(pm.collectionVariables.get('baseFinished'));",
+            "const baseRev  = Number(pm.collectionVariables.get('baseRevenue'));",
+            "console.log('Metricas agora:', JSON.stringify(j));",
+            "console.log('Delta desta execucao -> OS: +' + (j.totalWorkOrders - baseOs) +",
+            "            ' | entregues: +' + (j.finishedWorkOrders - baseFin) +",
+            "            ' | receita: +' + (Number(j.totalRevenue) - baseRev).toFixed(2));",
+            "",
+            "// Verificacoes por DELTA, nao por valor absoluto: e o que permite reexecutar",
+            "// a collection sem limpar o banco.",
+            "pm.test('esta execucao criou exatamente 5 OS', () => {",
+            "  pm.expect(j.totalWorkOrders - baseOs).to.eql(5);",
+            "});",
+            "pm.test('esta execucao entregou exatamente 1 OS', () => {",
+            "  pm.expect(j.finishedWorkOrders - baseFin).to.eql(1);",
+            "});",
+            "pm.test('receita reconhecida so na entrega: +R$ 225,90', () => {",
+            "  pm.expect(Number((Number(j.totalRevenue) - baseRev).toFixed(2))).to.eql(225.90);",
+            "});"
           ] } }]
         },
         {
-          "name": "Mailpit — trilha completa de e-mails do ciclo",
+          "name": "Mailpit — trilha de e-mails desta OS",
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
             "header": [],
-            "url": { "raw": "{{mailpitUrl}}/api/v1/messages?limit=20", "host": ["{{mailpitUrl}}"], "path": ["api", "v1", "messages"], "query": [{ "key": "limit", "value": "20" }] }
+            "url": { "raw": "{{mailpitUrl}}/api/v1/search?query={{orderNumber}}&limit=20", "host": ["{{mailpitUrl}}"], "path": ["api", "v1", "search"], "query": [{ "key": "query", "value": "{{orderNumber}}" }, { "key": "limit", "value": "20" }] }
           },
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('200 OK', () => pm.response.to.have.status(200));",
             "const j = pm.response.json();",
-            "console.log('--- E-MAILS ENVIADOS ---');",
+            "console.log('--- E-MAILS DA ' + pm.collectionVariables.get('orderNumber') + ' ---');",
             "j.messages.forEach(m => console.log('• ' + m.Subject));",
             "const assuntos = j.messages.map(m => m.Subject).join(' || ');",
             "pm.test('notificou orcamento pronto', () => pm.expect(assuntos).to.include('aguardando sua aprovação'));",
