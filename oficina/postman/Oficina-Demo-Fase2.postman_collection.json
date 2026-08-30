@@ -1,0 +1,694 @@
+{
+  "info": {
+    "_postman_id": "8f3c1d20-5a7e-4c11-9b64-0d2f7a6e4c31",
+    "name": "Oficina Mecânica — Demo Fase 2 (vídeo)",
+    "description": "Collection de demonstração da Fase 2, na ordem exata do roteiro de vídeo.\n\nCada pasta cobre um requisito do enunciado e os testes verificam o comportamento esperado — rode com o **Collection Runner** para ver tudo verde de uma vez, ou requisição a requisição para narrar.\n\n**Pré-requisito:** `docker-compose up -d` na pasta `oficina/`, com a stack em estado limpo (`docker-compose down -v` antes, para a numeração começar em OS-000001).\n\nVariáveis `baseUrl` (http://localhost:8080) e `mailpitUrl` (http://localhost:8025). Para apontar ao ambiente cloud, troque só `baseUrl` — mas lá o canal público de aprovação depende de SMTP real; use o canal administrativo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "mailpitUrl", "value": "http://localhost:8025" },
+    { "key": "clientCpf", "value": "529.982.247-25" },
+    { "key": "outroCpf", "value": "111.444.777-35" },
+    { "key": "adminUser", "value": "admin" },
+    { "key": "adminPass", "value": "admin123" },
+    { "key": "mecanicoUser", "value": "mecanico" },
+    { "key": "mecanicoPass", "value": "mecanico123" },
+    { "key": "token", "value": "" },
+    { "key": "tokenMecanico", "value": "" },
+    { "key": "clientId", "value": "" },
+    { "key": "vehicleId", "value": "" },
+    { "key": "serviceId", "value": "" },
+    { "key": "partId", "value": "" },
+    { "key": "workOrderId", "value": "" },
+    { "key": "orderNumber", "value": "" },
+    { "key": "woId2", "value": "" },
+    { "key": "woId3", "value": "" },
+    { "key": "woId4", "value": "" },
+    { "key": "woId5", "value": "" },
+    { "key": "orderNumber4", "value": "" },
+    { "key": "messageId", "value": "" },
+    { "key": "approvalToken", "value": "" },
+    { "key": "ativasAntes", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0 — Saúde do ambiente",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/q/health/live", "host": ["{{baseUrl}}"], "path": ["q", "health", "live"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('status UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+          ] } }]
+        },
+        {
+          "name": "Readiness (inclui checagem do banco)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/q/health/ready", "host": ["{{baseUrl}}"], "path": ["q", "health", "ready"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.test('status UP', () => pm.expect(j.status).to.eql('UP'));",
+            "pm.test('conexao com o banco checada', () => {",
+            "  const nomes = j.checks.map(c => c.name).join(' | ');",
+            "  console.log('Checks:', nomes);",
+            "  pm.expect(nomes.toLowerCase()).to.include('database');",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "1 — Autenticação (JWT RSA-256)",
+      "item": [
+        {
+          "name": "Login admin → salva token",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{adminUser}}\",\n  \"password\": \"{{adminPass}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('token', j.token);",
+            "pm.test('JWT emitido', () => pm.expect(j.token).to.be.a('string').and.to.have.length.above(100));",
+            "pm.test('papel ADMIN', () => pm.expect(j.role).to.eql('ADMIN'));",
+            "pm.test('expiracao de 8h (28800s)', () => pm.expect(j.expiresIn).to.eql(28800));"
+          ] } }]
+        },
+        {
+          "name": "Login mecanico → salva tokenMecanico",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"{{mecanicoUser}}\",\n  \"password\": \"{{mecanicoPass}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('tokenMecanico', j.token);",
+            "pm.test('papel MECHANIC', () => pm.expect(j.role).to.eql('MECHANIC'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "2 — Cadastros base",
+      "item": [
+        {
+          "name": "Criar cliente (PF) → clientId",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Victor Duarte\",\n  \"cpfCnpj\": \"{{clientCpf}}\",\n  \"clientType\": \"PF\",\n  \"email\": \"cliente@oficina.local\",\n  \"phone\": \"11999998888\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/clients", "host": ["{{baseUrl}}"], "path": ["admin", "clients"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('clientId', j.id);",
+            "pm.test('CPF normalizado para so digitos (Value Object)', () => pm.expect(j.cpfCnpj).to.eql('52998224725'));"
+          ] } }]
+        },
+        {
+          "name": "Criar veículo (placa Mercosul) → vehicleId",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"licensePlate\": \"ABC1D23\",\n  \"brand\": \"Volkswagen\",\n  \"model\": \"Golf GTI\",\n  \"productionYear\": 2021,\n  \"clientId\": {{clientId}}\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/vehicles", "host": ["{{baseUrl}}"], "path": ["admin", "vehicles"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('vehicleId', j.id);",
+            "pm.test('vinculado ao cliente criado', () => pm.expect(j.clientId).to.eql(pm.collectionVariables.get('clientId')));"
+          ] } }]
+        },
+        {
+          "name": "Criar serviço no catálogo → serviceId",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Troca de oleo e filtro\",\n  \"description\": \"Revisao basica\",\n  \"basePrice\": 180.00,\n  \"estimatedDurationMinutes\": 60\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/services", "host": ["{{baseUrl}}"], "path": ["admin", "services"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('serviceId', pm.response.json().id);"
+          ] } }]
+        },
+        {
+          "name": "Criar peça em estoque → partId",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Filtro de oleo\",\n  \"description\": \"Filtro original\",\n  \"unitPrice\": 45.90,\n  \"stockQuantity\": 50,\n  \"unit\": \"UN\",\n  \"minimumStock\": 5,\n  \"partType\": \"PECA\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/parts", "host": ["{{baseUrl}}"], "path": ["admin", "parts"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('partId', j.id);",
+            "pm.test('estoque acima do minimo', () => pm.expect(j.lowStock).to.be.false);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "3 — REQUISITO: Abertura de Ordem de Serviço",
+      "item": [
+        {
+          "name": "Criar OS com serviços e peças → 201 + identificação única",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"vehicleId\": {{vehicleId}},\n  \"notes\": \"Revisao dos 40.000 km\",\n  \"services\": [\n    { \"serviceItemId\": {{serviceId}}, \"notes\": \"Oleo sintetico\" }\n  ],\n  \"parts\": [\n    { \"partId\": {{partId}}, \"quantity\": 1 }\n  ]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.test('header Location aponta para o recurso criado', () => {",
+            "  pm.expect(pm.response.headers.get('Location')).to.include('/admin/work-orders/');",
+            "});",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('workOrderId', j.id);",
+            "pm.collectionVariables.set('orderNumber', j.orderNumber);",
+            "console.log('OS criada:', j.orderNumber, '| orcamento R$', j.totalCost);",
+            "pm.test('identificacao unica no formato OS-NNNNNN', () => pm.expect(j.orderNumber).to.match(/^OS-\\d{6}$/));",
+            "pm.test('status inicial RECEIVED', () => pm.expect(j.status).to.eql('RECEIVED'));",
+            "pm.test('orcamento somado pelo dominio: 180,00 + 45,90 = 225,90', () => pm.expect(Number(j.totalCost)).to.eql(225.90));",
+            "pm.test('dados do cliente e do veiculo no snapshot', () => {",
+            "  pm.expect(j.clientName).to.eql('Victor Duarte');",
+            "  pm.expect(j.vehicleLicensePlate).to.eql('ABC1D23');",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "4 — Massa para a fila de trabalho",
+      "description": "Cria mais 4 OS reaproveitando o mesmo cliente e veículo, deixando uma em cada status ativo — inclusive duas em RECEIVED, para provar o desempate por antiguidade na listagem.",
+      "item": [
+        {
+          "name": "OS #2 — fica em RECEIVED",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"vehicleId\": {{vehicleId}},\n  \"notes\": \"Barulho na suspensao\",\n  \"services\": [{ \"serviceItemId\": {{serviceId}} }]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('woId2', pm.response.json().id);"
+          ] } }]
+        },
+        {
+          "name": "OS #3 — criar",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"vehicleId\": {{vehicleId}},\n  \"notes\": \"Revisao de freios\",\n  \"services\": [{ \"serviceItemId\": {{serviceId}} }]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('woId3', pm.response.json().id);"
+          ] } }]
+        },
+        {
+          "name": "OS #3 → IN_DIAGNOSIS",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{woId3}}/start-diagnosis", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{woId3}}", "start-diagnosis"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('status IN_DIAGNOSIS', () => pm.expect(pm.response.json().status).to.eql('IN_DIAGNOSIS'));"
+          ] } }]
+        },
+        {
+          "name": "OS #4 — criar",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"vehicleId\": {{vehicleId}},\n  \"notes\": \"Troca de correia dentada\",\n  \"services\": [{ \"serviceItemId\": {{serviceId}} }]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const j = pm.response.json();",
+            "pm.collectionVariables.set('woId4', j.id);",
+            "pm.collectionVariables.set('orderNumber4', j.orderNumber);"
+          ] } }]
+        },
+        {
+          "name": "OS #4 → IN_DIAGNOSIS",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{woId4}}/start-diagnosis", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{woId4}}", "start-diagnosis"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ] } }]
+        },
+        {
+          "name": "OS #4 → AWAITING_APPROVAL",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{woId4}}/send-for-approval", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{woId4}}", "send-for-approval"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('status AWAITING_APPROVAL', () => pm.expect(pm.response.json().status).to.eql('AWAITING_APPROVAL'));"
+          ] } }]
+        },
+        {
+          "name": "OS #5 — fica em RECEIVED (desempate por antiguidade)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"vehicleId\": {{vehicleId}},\n  \"notes\": \"Alinhamento e balanceamento\",\n  \"services\": [{ \"serviceItemId\": {{serviceId}} }]\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('woId5', pm.response.json().id);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "5 — REQUISITO: Atualização de status por e-mail",
+      "item": [
+        {
+          "name": "OS principal → IN_DIAGNOSIS",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{workOrderId}}/start-diagnosis", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{workOrderId}}", "start-diagnosis"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('RECEIVED → IN_DIAGNOSIS', () => pm.expect(pm.response.json().status).to.eql('IN_DIAGNOSIS'));"
+          ] } }]
+        },
+        {
+          "name": "OS principal → AWAITING_APPROVAL (dispara o e-mail)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{workOrderId}}/send-for-approval", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{workOrderId}}", "send-for-approval"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.test('IN_DIAGNOSIS → AWAITING_APPROVAL', () => pm.expect(j.status).to.eql('AWAITING_APPROVAL'));",
+            "pm.test('codigo de autorizacao NAO vaza na resposta da API', () => {",
+            "  pm.expect(pm.response.text()).to.not.include('approvalToken');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Mailpit — localizar o e-mail do orçamento",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{mailpitUrl}}/api/v1/search?query={{orderNumber}}&limit=10", "host": ["{{mailpitUrl}}"], "path": ["api", "v1", "search"], "query": [{ "key": "query", "value": "{{orderNumber}}" }, { "key": "limit", "value": "10" }] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.test('e-mail de orcamento entregue ao cliente', () => pm.expect(j.messages.length).to.be.above(0));",
+            "const msg = j.messages.find(m => m.Subject.indexOf('aguardando sua aprova') > -1);",
+            "pm.test('assunto: orcamento aguardando aprovacao', () => pm.expect(msg, 'e-mail nao encontrado').to.not.be.undefined);",
+            "pm.collectionVariables.set('messageId', msg.ID);",
+            "console.log('Assunto:', msg.Subject);",
+            "console.log('Destinatario:', msg.To[0].Address);",
+            "pm.test('enviado ao e-mail do cliente da OS', () => pm.expect(msg.To[0].Address).to.eql('cliente@oficina.local'));"
+          ] } }]
+        },
+        {
+          "name": "Mailpit — ler o e-mail e extrair o código de autorização",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{mailpitUrl}}/api/v1/message/{{messageId}}", "host": ["{{mailpitUrl}}"], "path": ["api", "v1", "message", "{{messageId}}"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const corpo = pm.response.json().Text;",
+            "console.log('----- CORPO DO E-MAIL -----');",
+            "console.log(corpo);",
+            "const m = corpo.match(/C[oó]digo de autoriza[cç][aã]o:\\s*(\\S+)/);",
+            "pm.test('codigo de autorizacao presente no e-mail', () => pm.expect(m, 'regex nao casou').to.not.be.null);",
+            "pm.collectionVariables.set('approvalToken', m[1]);",
+            "console.log('>>> Codigo extraido:', m[1]);",
+            "pm.test('codigo de 256 bits (43 chars base64url)', () => pm.expect(m[1]).to.have.lengthOf(43));",
+            "pm.test('e-mail traz o valor do orcamento', () => pm.expect(corpo).to.include('225.90'));"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "6 — REQUISITO: Consulta de status e aprovação externa",
+      "item": [
+        {
+          "name": "Consultar status da OS (público, sem token)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/status", "host": ["{{baseUrl}}"], "path": ["public", "work-orders", "{{orderNumber}}", "status"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK sem autenticacao', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "console.log('Status ao cliente:', j.statusLabel);",
+            "pm.test('rotulo em PT-BR conforme o enunciado', () => pm.expect(j.statusLabel).to.eql('Aguardando Aprovação'));",
+            "const bruto = pm.response.text();",
+            "pm.test('nao expoe CPF, placa, orcamento nem itens', () => {",
+            "  pm.expect(bruto).to.not.include('cpfCnpj');",
+            "  pm.expect(bruto).to.not.include('LicensePlate');",
+            "  pm.expect(bruto).to.not.include('totalCost');",
+            "  pm.expect(bruto).to.not.include('clientName');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Aprovar orçamento (CPF + código do e-mail) → IN_EXECUTION",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"approvalToken\": \"{{approvalToken}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": ["{{baseUrl}}"], "path": ["public", "work-orders", "{{orderNumber}}", "approve"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "pm.test('AWAITING_APPROVAL → IN_EXECUTION', () => pm.expect(j.status).to.eql('IN_EXECUTION'));",
+            "pm.test('data de aprovacao registrada', () => pm.expect(j.approvedAt).to.not.be.null);"
+          ] } }]
+        },
+        {
+          "name": "Reutilizar o MESMO código → 422 (uso único)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\",\n  \"approvalToken\": \"{{approvalToken}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber}}/approve", "host": ["{{baseUrl}}"], "path": ["public", "work-orders", "{{orderNumber}}", "approve"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+            "pm.test('mensagem explica que o link ja foi usado', () => {",
+            "  pm.expect(pm.response.json().message).to.include('já foi utilizado');",
+            "});",
+            "console.log('Token queimado:', pm.response.json().message);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "7 — REQUISITO: Listagem ordenada da fila de trabalho",
+      "item": [
+        {
+          "name": "Listar OS ativas → ordem por prioridade + antiguidade",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const lista = pm.response.json();",
+            "console.log('--- FILA DE TRABALHO ---');",
+            "lista.forEach((o, i) => console.log((i + 1) + '. ' + o.orderNumber + '  ' + o.status));",
+            "",
+            "const prioridade = { IN_EXECUTION: 0, AWAITING_APPROVAL: 1, IN_DIAGNOSIS: 2, RECEIVED: 3 };",
+            "pm.test('ordenado: Execucao > Aguardando Aprovacao > Diagnostico > Recebida', () => {",
+            "  for (let i = 1; i < lista.length; i++) {",
+            "    pm.expect(prioridade[lista[i].status]).to.be.at.least(prioridade[lista[i - 1].status]);",
+            "  }",
+            "});",
+            "",
+            "pm.test('dentro do mesmo status, mais antigas primeiro', () => {",
+            "  for (let i = 1; i < lista.length; i++) {",
+            "    if (lista[i].status === lista[i - 1].status) {",
+            "      pm.expect(new Date(lista[i].createdAt).getTime())",
+            "        .to.be.at.least(new Date(lista[i - 1].createdAt).getTime());",
+            "    }",
+            "  }",
+            "});",
+            "",
+            "pm.test('nenhuma OS terminal aparece na fila ativa', () => {",
+            "  const status = lista.map(o => o.status);",
+            "  ['FINISHED', 'DELIVERED', 'CANCELLED'].forEach(s => pm.expect(status).to.not.include(s));",
+            "});",
+            "",
+            "const total = pm.response.headers.get('X-Total-Count');",
+            "pm.test('header X-Total-Count exposto', () => pm.expect(total).to.not.be.null);",
+            "pm.collectionVariables.set('ativasAntes', Number(total));",
+            "console.log('X-Total-Count:', total);"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "8 — REQUISITO: Exclusão lógica (não física)",
+      "item": [
+        {
+          "name": "Concluir execução → FINISHED (dispara e-mail)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{workOrderId}}/complete", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{workOrderId}}", "complete"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('IN_EXECUTION → FINISHED', () => pm.expect(pm.response.json().status).to.eql('FINISHED'));"
+          ] } }]
+        },
+        {
+          "name": "Registrar entrega → DELIVERED (dispara e-mail)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{workOrderId}}/deliver", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{workOrderId}}", "deliver"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('FINISHED → DELIVERED', () => pm.expect(pm.response.json().status).to.eql('DELIVERED'));"
+          ] } }]
+        },
+        {
+          "name": "Fila ativa → a OS entregue SUMIU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const lista = pm.response.json();",
+            "const alvo = pm.collectionVariables.get('orderNumber');",
+            "pm.test('OS entregue nao aparece mais na fila', () => {",
+            "  pm.expect(lista.map(o => o.orderNumber)).to.not.include(alvo);",
+            "});",
+            "const agora = Number(pm.response.headers.get('X-Total-Count'));",
+            "const antes = Number(pm.collectionVariables.get('ativasAntes'));",
+            "console.log('Fila ativa: ' + antes + ' → ' + agora);",
+            "pm.test('total de ativas caiu em 1', () => pm.expect(agora).to.eql(antes - 1));"
+          ] } }]
+        },
+        {
+          "name": "Filtrar por DELIVERED → ela CONTINUA no banco",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders?status=DELIVERED", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"], "query": [{ "key": "status", "value": "DELIVERED" }] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const lista = pm.response.json();",
+            "const alvo = pm.collectionVariables.get('orderNumber');",
+            "pm.test('exclusao e LOGICA: o registro existe e e consultavel', () => {",
+            "  pm.expect(lista.map(o => o.orderNumber)).to.include(alvo);",
+            "});",
+            "console.log('OS ' + alvo + ' segue no banco, com status DELIVERED.');"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "9 — Segurança e cenários de erro",
+      "item": [
+        {
+          "name": "Sem token → 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ] } }]
+        },
+        {
+          "name": "Mecânico criando peça → 403 (só ADMIN)",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{tokenMecanico}}", "type": "string" }] },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Pastilha de freio\",\n  \"unitPrice\": 120.00,\n  \"stockQuantity\": 10,\n  \"unit\": \"UN\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/admin/parts", "host": ["{{baseUrl}}"], "path": ["admin", "parts"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('403 Forbidden', () => pm.response.to.have.status(403));"
+          ] } }]
+        },
+        {
+          "name": "Aprovar com CPF de outro cliente → 404 (não confirma existência)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{outroCpf}}\",\n  \"approvalToken\": \"codigo-chutado-por-um-atacante\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber4}}/approve", "host": ["{{baseUrl}}"], "path": ["public", "work-orders", "{{orderNumber4}}", "approve"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+            "pm.test('mensagem generica: nao revela se a OS existe', () => {",
+            "  pm.expect(pm.response.text().toLowerCase()).to.include('não encontrada');",
+            "});"
+          ] } }]
+        },
+        {
+          "name": "Aprovar sem o código → 400 (Bean Validation)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientCpfCnpj\": \"{{clientCpf}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": { "raw": "{{baseUrl}}/public/work-orders/{{orderNumber4}}/approve", "host": ["{{baseUrl}}"], "path": ["public", "work-orders", "{{orderNumber4}}", "approve"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ] } }]
+        },
+        {
+          "name": "Consultar OS inexistente → 404",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/public/work-orders/OS-999999/status", "host": ["{{baseUrl}}"], "path": ["public", "work-orders", "OS-999999", "status"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ] } }]
+        },
+        {
+          "name": "Transição inválida: aprovar OS já entregue → 422",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/work-orders/{{workOrderId}}/approve", "host": ["{{baseUrl}}"], "path": ["admin", "work-orders", "{{workOrderId}}", "approve"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('422 Unprocessable Entity', () => pm.response.to.have.status(422));",
+            "console.log('Maquina de estados barrou:', pm.response.json().message);",
+            "pm.test('nao vaza stack trace ao cliente', () => {",
+            "  pm.expect(pm.response.text()).to.not.include('java.lang');",
+            "  pm.expect(pm.response.text()).to.not.include('at br.com.oficina');",
+            "});"
+          ] } }]
+        }
+      ]
+    },
+    {
+      "name": "10 — Observabilidade",
+      "item": [
+        {
+          "name": "Métricas Prometheus (/q/metrics)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/q/metrics", "host": ["{{baseUrl}}"], "path": ["q", "metrics"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const corpo = pm.response.text();",
+            "pm.test('expoe metricas de JVM (base do scale por metrica de aplicacao)', () => {",
+            "  pm.expect(corpo).to.include('jvm_memory_used_bytes');",
+            "});",
+            "pm.test('expoe metricas de HTTP server', () => pm.expect(corpo).to.include('http_server_requests'));"
+          ] } }]
+        },
+        {
+          "name": "Métricas de negócio (/admin/metrics, só ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/metrics", "host": ["{{baseUrl}}"], "path": ["admin", "metrics"] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "console.log('Metricas de negocio:', JSON.stringify(j));",
+            "pm.test('5 OS criadas no total', () => pm.expect(j.totalWorkOrders).to.eql(5));",
+            "pm.test('1 OS concluida/entregue', () => pm.expect(j.finishedWorkOrders).to.eql(1));",
+            "pm.test('receita reconhecida so na entrega: R$ 225,90', () => pm.expect(Number(j.totalRevenue)).to.eql(225.90));"
+          ] } }]
+        },
+        {
+          "name": "Mailpit — trilha completa de e-mails do ciclo",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{mailpitUrl}}/api/v1/messages?limit=20", "host": ["{{mailpitUrl}}"], "path": ["api", "v1", "messages"], "query": [{ "key": "limit", "value": "20" }] }
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const j = pm.response.json();",
+            "console.log('--- E-MAILS ENVIADOS ---');",
+            "j.messages.forEach(m => console.log('• ' + m.Subject));",
+            "const assuntos = j.messages.map(m => m.Subject).join(' || ');",
+            "pm.test('notificou orcamento pronto', () => pm.expect(assuntos).to.include('aguardando sua aprovação'));",
+            "pm.test('notificou servico concluido', () => pm.expect(assuntos).to.include('concluído'));",
+            "pm.test('notificou veiculo entregue', () => pm.expect(assuntos).to.include('entregue'));"
+          ] } }]
+        }
+      ]
+    }
+  ]
+}
