@@ -57,7 +57,12 @@ COPY --from=build /app/target/quarkus-app/quarkus/ /app/quarkus/
 # OpenSSL gera o par de chaves JWT no primeiro start em ambiente local; wget serve ao
 # HEALTHCHECK. No Kubernetes as chaves vêm do Secret oficina-jwt-keys e o entrypoint
 # apenas as encontra prontas.
-RUN apk add --no-cache openssl wget
+# "apk upgrade" antes do add: a tag da imagem base é fixa (build reproduzível), mas
+# isso congela junto os pacotes do Alpine daquela data — e o gate do Trivy no
+# pipeline reprova CRITICAL com correção disponível (gnutls, openssl, sqlite-libs).
+# O upgrade traz esses pacotes para a versão corrigida do mesmo branch do Alpine,
+# sem trocar a versão do JRE.
+RUN apk --no-cache upgrade && apk add --no-cache openssl wget
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
 # Normaliza fins de linha para LF: se o script for checkout/commitado com CRLF
