@@ -109,7 +109,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Scan da imagem (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
+        # A tag é "v0.36.0", com o "v": o repositório da action publica as releases
+        # prefixadas. Sem o prefixo o runner falha ainda no "Set up job", com
+        # "unable to resolve action ... unable to find version".
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           format: table
