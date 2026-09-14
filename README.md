@@ -1,3 +1,18 @@
+> **⚠️ Repositório arquivado — não recebe mais commits.**
+>
+> A partir da Fase 3 o sistema vive em quatro repositórios sob a organização
+> [victor-duarte-mendonca](https://github.com/victor-duarte-mendonca):
+>
+> | Repositório | Conteúdo |
+> |---|---|
+> | [oficina-app](https://github.com/victor-duarte-mendonca/oficina-app) | Aplicação Quarkus, Dockerfile, manifestos K8s, migrations |
+> | [oficina-auth-lambda](https://github.com/victor-duarte-mendonca/oficina-auth-lambda) | Lambda de autenticação por CPF, API Gateway, authorizer |
+> | [oficina-infra-k8s](https://github.com/victor-duarte-mendonca/oficina-infra-k8s) | VPC, EC2/k3s, ECR, SGs, observabilidade (Terraform) |
+> | [oficina-infra-database](https://github.com/victor-duarte-mendonca/oficina-infra-database) | RDS PostgreSQL (Terraform) |
+>
+> O histórico das Fases 1 e 2 foi preservado em cada um deles. As specs que orientaram o split estão em
+> [`oficina/specs/`](oficina/specs/00-visao-geral.md).
+
 # Tech Challenge — Oficina Mecânica
 
 > **FIAP · Pós-Graduação SOAT (14SOAT) · Fases 1 e 2**
